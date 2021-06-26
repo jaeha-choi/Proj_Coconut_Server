@@ -18,8 +18,9 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.16
-    - name: Init
-      run: go mod init
+
+    - name: Update env var
+      run: go env -w GO111MODULE=auto
     
     - name: Build
       run: go build -v ./...
