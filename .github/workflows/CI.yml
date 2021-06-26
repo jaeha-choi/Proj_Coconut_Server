@@ -22,7 +22,14 @@ jobs:
     - name: Update env var
       run: go env -w GO111MODULE=auto
     
-    # TODO: Use cache? 
+    - name: Cache dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+      
     - name: Install dependencies
       run: go get gopkg.in/yaml.v3
     
