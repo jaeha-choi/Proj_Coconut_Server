@@ -1,6 +1,8 @@
 package main
 
-import "./src"
+import (
+	"./src"
+)
 
 func main() {
 	src.Start()
