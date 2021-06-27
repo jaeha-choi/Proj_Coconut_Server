@@ -33,32 +33,32 @@ func initTesting(outTo io.Writer, logMode LoggingMode) {
 // Debug logs only if LoggingMode is set to DEBUG
 func Debug(msg ...interface{}) {
 	if mode <= DEBUG {
-		logger.Println("DEBUG:\t" + fmt.Sprint(msg...))
+		_ = logger.Output(2, "DEBUG:\t"+fmt.Sprint(msg...))
 	}
 }
 
 // Info logs if LoggingMode is set to INFO or lower
 func Info(msg ...interface{}) {
 	if mode <= INFO {
-		logger.Println("INFO:\t" + fmt.Sprint(msg...))
+		_ = logger.Output(2, "INFO:\t"+fmt.Sprint(msg...))
 	}
 }
 
 // Warning logs if LoggingMode is set to WARNING or lower
 func Warning(msg ...interface{}) {
 	if mode <= WARNING {
-		logger.Println("WARNING:\t" + fmt.Sprint(msg...))
+		_ = logger.Output(2, "WARNING:\t"+fmt.Sprint(msg...))
 	}
 }
 
 // Error logs if LoggingMode is set to ERROR or lower
 func Error(msg ...interface{}) {
 	if mode <= ERROR {
-		logger.Println("ERROR:\t" + fmt.Sprint(msg...))
+		_ = logger.Output(2, "ERROR:\t"+fmt.Sprint(msg...))
 	}
 }
 
 // Fatal always logs when used
 func Fatal(msg ...interface{}) {
-	logger.Fatal("FATAL:\t" + fmt.Sprint(msg...))
+	_ = logger.Output(2, "FATAL:\t"+fmt.Sprint(msg...))
 }
