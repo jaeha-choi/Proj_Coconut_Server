@@ -2,8 +2,10 @@ package src
 
 import (
 	"../log"
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
+	"net"
 	"os"
 )
 
@@ -16,6 +18,14 @@ type Config struct {
 type Server struct {
 	Host string `yaml:"host"`
 	Port uint16 `yaml:"port"`
+}
+
+// Client contains information about each client devices
+type Client struct {
+	PublicIp    string `json:"publicIp"`
+	PrivateIp   string `json:"privateIp"`
+	PublicPort  string `json:"publicPort"`
+	PrivatePort string `json:"privatePort"`
 }
 
 // readConfig reads a config from a yaml file
@@ -34,11 +44,32 @@ func readConfig(fileName string) (*Config, error) {
 	return &configVar, nil
 }
 
-func Start() {
+func startListener(conf *Config) error {
+	listener, err := net.Listen("tcp", fmt.Sprint(conf.Server.Host, ":", conf.Server.Port))
+	if err != nil {
+		log.Fatal("Listener cannot be initialized")
+		os.Exit(1)
+	}
+	defer func() {
+		err = listener.Close()
+		log.Error("Error while closing listener")
+	}()
+	// Add loop here
+	_, err = listener.Accept()
+	if err != nil {
+		log.Warning("Error while accepting connection")
+		return err
+	}
+	fmt.Println("Connection established")
+	return nil
+}
+
+func Start(configName string) {
 	log.Init(os.Stdout, log.DEBUG)
-	conf, err := readConfig("config.yml")
+	conf, err := readConfig(configName)
 	if conf == nil || err != nil {
 		log.Fatal("Error while reading config")
 		os.Exit(1)
 	}
+	err = startListener(conf)
 }
