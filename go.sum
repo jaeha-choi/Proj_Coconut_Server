@@ -1,0 +1,6 @@
+github.com/jaeha-choi/Proj_Coconut_Utility v0.0.0-20210628171604-a61324f5dd3a h1:dpz15HTI5AVbQ0PndPTOkgJxRKnKpp1ic89jggco7ng=
+github.com/jaeha-choi/Proj_Coconut_Utility v0.0.0-20210628171604-a61324f5dd3a/go.mod h1:V1qlWaaHM/QdRpKl/zl5F8K7tMh9gzx2U5TG0k7AtMo=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b h1:h8qDotaEPuJATrMmW04NCwg7v22aHH28wwpauUhK9Oo=
+gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
