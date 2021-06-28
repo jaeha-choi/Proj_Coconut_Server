@@ -1,7 +1,7 @@
-package src
+package server
 
 import (
-	"../log"
+	"../../pkg/log"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"

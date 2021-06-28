@@ -1,7 +1,7 @@
-package src
+package server
 
 import (
-	"../log"
+	"../../pkg/log"
 	"net"
 	"os"
 	"testing"
