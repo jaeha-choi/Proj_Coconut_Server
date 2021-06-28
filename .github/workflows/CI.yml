@@ -18,8 +18,8 @@ jobs:
       with:
         go-version: 1.16
 
-    - name: Update env var
-      run: go env -w GO111MODULE=auto
+#     - name: Update env var
+#       run: go env -w GO111MODULE=auto
     
     - name: Cache dependencies
       uses: actions/cache@v2
@@ -32,8 +32,8 @@ jobs:
     - name: Install dependencies
       run: go get gopkg.in/yaml.v3
     
-    - name: Build
-      run: go build -v ./...
+#     - name: Build
+#       run: go build -v ./...
 
     - name: Test
       run: go test -v ./...
