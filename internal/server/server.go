@@ -1,8 +1,8 @@
 package server
 
 import (
-	"../../pkg/log"
 	"fmt"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"net"

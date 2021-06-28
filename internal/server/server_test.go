@@ -1,7 +1,7 @@
 package server
 
 import (
-	"../../pkg/log"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"net"
 	"os"
 	"testing"

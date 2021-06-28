@@ -1,7 +1,7 @@
 package main
 
 import (
-	"../../internal/server"
+	"github.com/jaeha-choi/Proj_Coconut_Server/internal/server"
 )
 
 func main() {
