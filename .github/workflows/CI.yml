@@ -2,14 +2,19 @@ name: CI
 
 on:
   push:
+    branches: [ master, stable ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, stable ]
   workflow_dispatch:
 
 jobs:
 
-  build:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
     steps:
     - uses: actions/checkout@v2
 
@@ -32,8 +37,8 @@ jobs:
     - name: Install dependencies
       run: go get gopkg.in/yaml.v3
     
-#     - name: Build
-#       run: go build -v ./...
+    - name: Build
+      run: go build -v ./...
 
     - name: Test
       run: go test -v ./...
