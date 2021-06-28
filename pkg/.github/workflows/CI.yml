@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, stable ]
+  pull_request:
+    branches: [ master, stable ]
+  workflow_dispatch:
+
+jobs:
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+#     - name: Update env var
+#       run: go env -w GO111MODULE=auto
+    
+    - name: Cache dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+      
+    - name: Install dependencies
+      run: go get gopkg.in/yaml.v3
+    
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
