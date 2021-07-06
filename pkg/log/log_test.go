@@ -10,6 +10,11 @@ func TestInit(t *testing.T) {
 	initTesting(os.Stdout, DEBUG)
 }
 
+func TestLogInit(t *testing.T) {
+	Init(os.Stdout, DEBUG)
+	Fatal("Fatal error generated")
+}
+
 func TestDebug(t *testing.T) {
 	var buffer bytes.Buffer
 	initTesting(&buffer, DEBUG)
