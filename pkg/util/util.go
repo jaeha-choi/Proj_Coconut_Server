@@ -394,7 +394,7 @@ func CheckIPAddress(ip string) bool {
 }
 
 // WriteConfig writes config to fileName in yaml format
-func WriteConfig(fileName string, config *interface{}) (err error) {
+func WriteConfig(fileName string, config interface{}) (err error) {
 	dstFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Debug(err)
