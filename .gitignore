@@ -1,6 +1,8 @@
 ### Project Specific
 # If coverage.txt was generated locally, ignore that file
 coverage.txt
+*.key
+*.crt
 
 ### Linux template
 *~
