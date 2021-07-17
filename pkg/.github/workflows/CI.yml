@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master, stable ]
+    branches: [ master, stable, wip_test_win_endings ]
   pull_request:
     branches: [ master, stable ]
   workflow_dispatch:
