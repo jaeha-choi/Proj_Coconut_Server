@@ -54,6 +54,7 @@ type Server struct {
 
 var NoAvailableAddCodeError = errors.New("no available add code error")
 
+// init initializes logger and set mRand seed
 func init() {
 	log.Init(os.Stdout, log.DEBUG)
 	var seed [8]byte
@@ -67,6 +68,7 @@ func init() {
 	mRand.Seed(int64(binary.LittleEndian.Uint64(seed[:])))
 }
 
+// initAddCode initializes Add Code and shuffles them
 func (serv *Server) initAddCode() {
 	// No need to lock here as no other goroutine accesses these arrays yet.
 	for i := 0; i < addCodeArrSize; i++ {
