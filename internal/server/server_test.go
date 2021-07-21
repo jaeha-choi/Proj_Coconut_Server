@@ -47,7 +47,7 @@ func TestInitConfig(t *testing.T) {
 	}
 }
 
-func TestAddRemoveDev(t *testing.T) {
+func TestAddRemoveDevice(t *testing.T) {
 	t.Cleanup(cleanUpHelper)
 	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
 	createCopy("../../data/cert/server.key", "./data/cert/server.key")
@@ -84,6 +84,39 @@ func TestAddRemoveDev(t *testing.T) {
 	}
 	serv.RemoveDevice(code)
 	serv.RemoveDevice(code2)
+}
+
+func BenchmarkAddRemoveDevice(b *testing.B) {
+	b.Cleanup(cleanUpHelper)
+	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
+	createCopy("../../data/cert/server.key", "./data/cert/server.key")
+
+	if err := os.MkdirAll("./config", os.ModePerm); err != nil {
+		log.Debug(err)
+		b.Error("Error while creating tmp directory")
+		return
+	}
+	confPath := "../../config/config.yml"
+	var serv *Server
+	var err error
+	if serv, err = ReadConfig(confPath); err != nil {
+		log.Debug(err)
+		log.Warning("Could not read config, trying default config")
+		if serv, err = InitConfig(); err != nil {
+			log.Debug(err)
+			b.Error("Could not load default config")
+			return
+		}
+	}
+	channel := make(chan struct{}, 4)
+	for i := 0; i < b.N; i++ {
+		channel <- struct{}{}
+		go func() {
+			code, _ := serv.AddDevice("abcd")
+			serv.RemoveDevice(code)
+			<-channel
+		}()
+	}
 }
 
 // Comment out until the function is implemented
