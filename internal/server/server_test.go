@@ -47,6 +47,45 @@ func TestInitConfig(t *testing.T) {
 	}
 }
 
+func TestAddRemoveDev(t *testing.T) {
+	t.Cleanup(cleanUpHelper)
+	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
+	createCopy("../../data/cert/server.key", "./data/cert/server.key")
+
+	if err := os.MkdirAll("./config", os.ModePerm); err != nil {
+		log.Debug(err)
+		log.Error("Error while creating tmp directory")
+		return
+	}
+	confPath := "../../config/config.yml"
+	var serv *Server
+	var err error
+	if serv, err = ReadConfig(confPath); err != nil {
+		log.Debug(err)
+		log.Warning("Could not read config, trying default config")
+		if serv, err = InitConfig(); err != nil {
+			log.Debug(err)
+			t.Error("Could not load default config")
+			return
+		}
+	}
+
+	code, err := serv.AddDevice("abcd")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in AddDevice")
+		return
+	}
+	code2, err := serv.AddDevice("efgh")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in AddDevice")
+		return
+	}
+	serv.RemoveDevice(code)
+	serv.RemoveDevice(code2)
+}
+
 // Comment out until the function is implemented
 //func TestStartListener(t *testing.T) {
 //	testConf, err := ReadConfig("../../config/config.yml")
