@@ -7,13 +7,31 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	mRand "math/rand"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+)
+
+//type Command string
+
+// Commands and responses. Perhaps using string isn't necessary.
+const (
+	// Commands
+
+	Initialize   = "INIT"
+	Quit         = "QUIT"
+	RequestRelay = "RELY"
+
+	// Response
+
+	Affirmation = "A"
+	Negation    = "N"
 )
 
 const (
@@ -23,6 +41,14 @@ const (
 	addCodeArrSize = 999999
 )
 
+type client struct {
+	isBeingUsed      bool
+	isBeingUsedMutex *sync.Mutex
+	addCodeIdx       int
+	connToClient     net.Conn
+	// May add Pub/Priv IP/Port for hole punching
+}
+
 // Server related configurations
 type Server struct {
 	Host     string `yaml:"host"`
@@ -30,11 +56,11 @@ type Server struct {
 	CertPath string `yaml:"cert_path"`
 
 	addCodeArrMutex *sync.RWMutex
-	// addCodeArr stores shuffled Add Code in integer with a boolean indicating
-	// the status of the Add Code.
-	// True if available for the server to allocate the Add Code to other device, false otherwise.
+	// addCodeArr stores shuffled Add Code in integer with a string indicating
+	// the device occupying the Add Code.
+	// string != "" if the Add Code is allocated to a device, "" otherwise.
 	// 000 000 is reserved for initial value, and should not be used for allocation.
-	// i.e. addCodeArr[index] = [Add Code (int), isUsed (bool)]
+	// i.e. addCodeArr[index] = [Add Code (int), pubKey (string)]
 	addCodeArr [addCodeArrSize][2]interface{}
 
 	// addCodeIdx stores indices to actual Add Code (inverse of addCodeArr)
@@ -46,13 +72,17 @@ type Server struct {
 	// nextAddCodeIdx represents index of next available Add Code element in addCodeArr
 	nextAddCodeIdx int
 
-	// devices store Add Codes as a key (int) and hash of a public key as a value (string).
+	// devices stores public key hash as a key (string), client structure as a value.
 	devices sync.Map
 
 	tls *tls.Config
 }
 
 var NoAvailableAddCodeError = errors.New("no available add code error")
+
+var UnknownCommandError = errors.New("unknown command error")
+
+var ClientNotFoundError = errors.New("client not found error")
 
 // init initializes logger and set mRand seed
 func init() {
@@ -72,7 +102,7 @@ func init() {
 func (serv *Server) initAddCode() {
 	// No need to lock here as no other goroutine accesses these arrays yet.
 	for i := 0; i < addCodeArrSize; i++ {
-		serv.addCodeArr[i] = [2]interface{}{i + 1, false}
+		serv.addCodeArr[i] = [2]interface{}{i + 1, ""}
 	}
 	mRand.Shuffle(addCodeArrSize, func(i, j int) {
 		serv.addCodeArr[i], serv.addCodeArr[j] = serv.addCodeArr[j], serv.addCodeArr[i]
@@ -162,23 +192,24 @@ func (serv *Server) RemoveDevice(addCode int) {
 
 	// Write lock
 	serv.addCodeArrMutex.Lock()
-	// Mark the Add Code as available, by setting isUsed field to false
-	serv.addCodeArr[addCodeIdx][1] = false
+	// Mark the Add Code as available, by setting pubKey field to empty string
+	pubKey := serv.addCodeArr[addCodeIdx][1]
+	serv.addCodeArr[addCodeIdx][1] = ""
 	serv.addCodeArrMutex.Unlock()
 
 	// Remove device from map
-	serv.devices.Delete(addCode)
+	serv.devices.Delete(pubKey)
 
 	// Log
 	//log.Debug("removeDev//addCodeArr: ", serv.addCodeArr[addCodeIdx])
-	//log.Debug(serv.devices.Load(addCode))
+	//log.Debug(serv.devices.Load(pubKey))
 }
 
 // AddDevice adds a device by adding the public key hash to the server,
 // so that other devices can query and request public key.
 // Returns assigned Add Code, where 0 < Add Code <= addCodeArrSize
 // Returns NoAvailableAddCodeError if all Add Code is in use
-func (serv *Server) AddDevice(pubKeyHash string) (addCode int, err error) {
+func (serv *Server) AddDevice(pubKeyHash string, conn net.Conn) (addCode int, err error) {
 	// serv.nextAddCodeIdxMutex is locked until the return statement of this function
 	// since it updates indices. May change depending on the significance of throttling.
 	serv.nextAddCodeIdxMutex.Lock()
@@ -193,8 +224,8 @@ func (serv *Server) AddDevice(pubKeyHash string) (addCode int, err error) {
 
 	retry := 0
 	// Repeat until available code is found.
-	// elem[1] is always boolean; no need to check for error
-	for elem[1].(bool) {
+	// elem[1] is always string; no need to check for error
+	for elem[1].(string) == "" {
 		serv.nextAddCodeIdx += 1
 		// if serv.nextAddCodeIdx reaches the max size, reset to 0
 		if serv.nextAddCodeIdx == addCodeArrSize {
@@ -219,7 +250,7 @@ func (serv *Server) AddDevice(pubKeyHash string) (addCode int, err error) {
 
 	// Mark current Add Code as being used
 	serv.addCodeArrMutex.Lock()
-	serv.addCodeArr[serv.nextAddCodeIdx][1] = true
+	serv.addCodeArr[serv.nextAddCodeIdx][1] = pubKeyHash
 	serv.addCodeArrMutex.Unlock()
 
 	// Increment next available Add Code index
@@ -230,16 +261,82 @@ func (serv *Server) AddDevice(pubKeyHash string) (addCode int, err error) {
 		serv.nextAddCodeIdx = 0
 	}
 
+	newClient := &client{
+		isBeingUsed:      false,
+		isBeingUsedMutex: &sync.Mutex{},
+		addCodeIdx:       serv.addCodeIdx[addCode],
+		connToClient:     conn,
+	}
+
 	// Add device public key hash to online devices
-	serv.devices.Store(addCode, pubKeyHash)
+	serv.devices.Store(pubKeyHash, newClient)
 
 	// Log
 	//log.Debug("addDev//addCodeArr: ", serv.addCodeArr[serv.nextAddCodeIdx-1])
-	//log.Debug(serv.devices.Load(addCode))
+	//log.Debug(serv.devices.Load(pubKeyHash))
 	return addCode, nil
 }
 
-func connectionHandler(conn net.Conn) (err error) {
+func (serv *Server) handleInit(conn net.Conn) (err error) {
+	pubKeyHash, err := util.ReadBytes(conn)
+	if err != nil {
+		return err
+	}
+	addCode, err := serv.AddDevice(string(pubKeyHash), conn)
+	if err != nil {
+		return err
+	}
+	// TODO: Replace WriteBytes with WriteUint once implemented
+	_, err = util.WriteBytes(conn, []byte(strconv.Itoa(addCode)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
+	receiverPubKeyHash, err := util.ReadBytes(conn)
+	if err != nil {
+		return err
+	}
+	c, ok := serv.devices.Load(string(receiverPubKeyHash))
+	if !ok || c == nil {
+		_, err := util.WriteBytes(conn, []byte(Negation))
+		if err != nil {
+			return err
+		}
+		return ClientNotFoundError
+	}
+	_, err = util.WriteBytes(conn, []byte(Affirmation))
+	if err != nil {
+		return err
+	}
+
+	receiver := c.(client)
+	// Add for loop after adding buffer size limit to Read/Write Bytes
+	//for {
+	bytes, err := util.ReadBytes(conn)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while relaying data (ReadBytes)")
+		return err
+	}
+	_, err = util.WriteBytes(receiver.connToClient, bytes)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while relaying data (WriteBytes)")
+		return err
+	}
+	//}
+	// Send status
+	_, err = util.WriteBytes(conn, []byte(Affirmation))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	defer func() {
 		if err := conn.Close(); err != nil {
 			log.Debug(err)
@@ -247,14 +344,30 @@ func connectionHandler(conn net.Conn) (err error) {
 			return
 		}
 	}()
-	// TODO: Remove these lines after testing
-	b := make([]byte, 5)
-	_, _ = conn.Read(b)
-	log.Info("Received: ", string(b))
+	isQuit := false
+	for !isQuit {
+		command, err := util.ReadBytes(conn)
+		if err != nil {
+			return err
+		}
+		switch string(command) {
+		case Initialize:
+			e := serv.handleInit(conn)
+			if e != nil {
+				log.Debug(e)
+				err = e
+			}
+		case RequestRelay:
 
-	// Do something here
+		case Quit:
+			isQuit = true
+		default:
+			log.Debug(UnknownCommandError)
+			return UnknownCommandError
+		}
+	}
 
-	return nil
+	return err
 }
 
 func (serv *Server) Start() (err error) {
@@ -265,13 +378,15 @@ func (serv *Server) Start() (err error) {
 		os.Exit(1)
 	}
 	defer func() {
-		if err := listener.Close(); err != nil {
+		if e := listener.Close(); e != nil {
 			log.Debug(err)
 			log.Error("Error while closing listener")
+			err = e
 		}
 	}()
 	for {
-		// tlsConn is closed in connectionHandler to prevent memory leak
+		// tlsConn is closed in connectionHandler to prevent
+		// memory leak caused by using defer in a loop
 		tlsConn, err := listener.Accept()
 		if err != nil {
 			log.Debug(err)
@@ -281,10 +396,12 @@ func (serv *Server) Start() (err error) {
 		log.Debug("RemoteAddr: ", tlsConn.RemoteAddr())
 		log.Debug("LocalAddr: ", tlsConn.LocalAddr())
 		log.Info("Connection established")
-		if err := connectionHandler(tlsConn); err != nil {
-			return err
-		}
-		break // TODO: Remove this line
+		go func() {
+			if e := serv.connectionHandler(tlsConn); e != nil {
+				log.Debug(e)
+				log.Error("Error returned by connectionHandler")
+			}
+		}()
 	}
-	return nil
+	return err
 }
