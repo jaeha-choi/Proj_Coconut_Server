@@ -225,7 +225,7 @@ func (serv *Server) AddDevice(pubKeyHash string, conn net.Conn) (addCode int, er
 	retry := 0
 	// Repeat until available code is found.
 	// elem[1] is always string; no need to check for error
-	for elem[1].(string) == "" {
+	for elem[1].(string) != "" {
 		serv.nextAddCodeIdx += 1
 		// if serv.nextAddCodeIdx reaches the max size, reset to 0
 		if serv.nextAddCodeIdx == addCodeArrSize {
