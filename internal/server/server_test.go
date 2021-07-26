@@ -70,20 +70,34 @@ func TestAddRemoveDevice(t *testing.T) {
 		}
 	}
 
-	code, err := serv.AddDevice("abcd", nil)
+	serv.addDevice("abcd", nil)
+	serv.addDevice("efgh", nil)
+
+	code, err := serv.getAddCode("abcd")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in AddDevice")
+		t.Error("Error in getAddCode")
 		return
 	}
-	code2, err := serv.AddDevice("efgh", nil)
+	code2, err := serv.getAddCode("efgh")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in AddDevice")
+		t.Error("Error in getAddCode")
 		return
 	}
-	serv.RemoveDevice(code)
-	serv.RemoveDevice(code2)
+
+	err = serv.removeAddCode(code, "abcd")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in removeAddCode")
+		return
+	}
+	err = serv.removeAddCode(code2, "efgh")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in removeAddCode")
+		return
+	}
 }
 
 func BenchmarkAddRemoveDevice(b *testing.B) {
@@ -108,12 +122,17 @@ func BenchmarkAddRemoveDevice(b *testing.B) {
 			return
 		}
 	}
+	serv.addDevice("abcd", nil)
 	channel := make(chan struct{}, 4)
 	for i := 0; i < b.N; i++ {
 		channel <- struct{}{}
 		go func() {
-			code, _ := serv.AddDevice("abcd", nil)
-			serv.RemoveDevice(code)
+			code, _ := serv.getAddCode("abcd")
+			err := serv.removeAddCode(code, "abcd")
+			if err != nil {
+				b.Error("Error in removeAddCode")
+				return
+			}
 			<-channel
 		}()
 	}
