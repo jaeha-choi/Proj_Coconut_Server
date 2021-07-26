@@ -37,10 +37,24 @@ func Debug(msg ...interface{}) {
 	}
 }
 
+// Debugf logs if LoggingMode is set to DEBUG or lower
+func Debugf(format string, msg ...interface{}) {
+	if mode <= DEBUG {
+		_ = logger.Output(2, "DEBUG:\t"+fmt.Sprintf(format, msg...))
+	}
+}
+
 // Info logs if LoggingMode is set to INFO or lower
 func Info(msg ...interface{}) {
 	if mode <= INFO {
 		_ = logger.Output(2, "INFO:\t"+fmt.Sprint(msg...))
+	}
+}
+
+// Infof logs if LoggingMode is set to INFO or lower
+func Infof(format string, msg ...interface{}) {
+	if mode <= INFO {
+		_ = logger.Output(2, "INFO:\t"+fmt.Sprintf(format, msg...))
 	}
 }
 
@@ -51,6 +65,13 @@ func Warning(msg ...interface{}) {
 	}
 }
 
+// Warningf logs if LoggingMode is set to WARNING or lower
+func Warningf(format string, msg ...interface{}) {
+	if mode <= WARNING {
+		_ = logger.Output(2, "WARNING:\t"+fmt.Sprintf(format, msg...))
+	}
+}
+
 // Error logs if LoggingMode is set to ERROR or lower
 func Error(msg ...interface{}) {
 	if mode <= ERROR {
@@ -58,7 +79,19 @@ func Error(msg ...interface{}) {
 	}
 }
 
+// Errorf logs if LoggingMode is set to ERROR or lower
+func Errorf(format string, msg ...interface{}) {
+	if mode <= ERROR {
+		_ = logger.Output(2, "Error:\t"+fmt.Sprintf(format, msg...))
+	}
+}
+
 // Fatal always logs when used
 func Fatal(msg ...interface{}) {
 	_ = logger.Output(2, "FATAL:\t"+fmt.Sprint(msg...))
+}
+
+// Fatalf always logs when used
+func Fatalf(format string, msg ...interface{}) {
+	_ = logger.Output(2, "FATAL:\t"+fmt.Sprintf(format, msg...))
 }

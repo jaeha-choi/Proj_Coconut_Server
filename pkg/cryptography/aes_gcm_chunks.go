@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	// ChunkSize should be less than max value of uint32 (4294967295)
+	// ChunkSize is a size of each file chunks in bytes.
+	// Should be less than max value of uint32 (4294967295)
 	// since the util package use unsigned 4 bytes to represent the data size.
-	ChunkSize = 1.28e+8
+	ChunkSize = 16777216 // 2^24 bytes, about 16.7 MB
 	IvSize    = 12
 
 	// MaxFileSize indicates theoretical limit for the file size. Because chunk number are
@@ -97,8 +98,8 @@ func DecryptSetup() (ag *AesGcmChunk, err error) {
 		log.Error("Error while creating download directory")
 		return nil, err
 	}
-	// Create temporary file for receiving
-	tmpFile, err := ioutil.TempFile(util.DownloadPath, ".tmp_download_")
+	// Create file for decrypted data
+	tmpFile, err := ioutil.TempFile(util.DownloadPath, ".tmp_decrypted_")
 	if err != nil {
 		log.Debug(err)
 		log.Error("Temp file could not be created")

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestInit(t *testing.T) {
+func init() {
 	initTesting(os.Stdout, DEBUG)
 }
 
@@ -25,6 +25,20 @@ func TestDebug(t *testing.T) {
 	buffer.Reset()
 	Info("test info")
 	if "Test: INFO:\ttest info\n" != buffer.String() {
+		t.Error("Output mismatch")
+	}
+}
+
+func TestDebugf(t *testing.T) {
+	var buffer bytes.Buffer
+	initTesting(&buffer, DEBUG)
+	Debugf(" %s", "test debug")
+	if "Test: DEBUG:\t test debug\n" != buffer.String() {
+		t.Error("Output mismatch")
+	}
+	buffer.Reset()
+	Infof("%s1", "test info")
+	if "Test: INFO:\ttest info1\n" != buffer.String() {
 		t.Error("Output mismatch")
 	}
 }

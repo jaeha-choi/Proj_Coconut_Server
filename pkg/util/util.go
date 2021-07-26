@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 const (
@@ -21,6 +22,13 @@ const (
 var SizeError = errors.New("size exceeded")
 
 var EmptyFileName = errors.New("empty filename")
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, BufferSize)
+		return b
+	},
+}
 
 // ReadString reads string from a connection
 func ReadString(reader io.Reader) (string, error) {
@@ -72,6 +80,25 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// ReadBytesToWriter reads message from reader and write it to writer.
+// First four bytes of reader should be uint32 size of the message,
+// represent in big endian.
+// Common usage for this function is to read from net.Conn, and write to temp file.
+func ReadBytesToWriter(reader io.Reader, writer io.Writer) (n int, err error) {
+	// Read message size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		return 0, err
+	}
+
+	totalReceived, err := readWrite(reader, writer, size)
+	if err != nil {
+		return totalReceived, err
+	}
+	return totalReceived, err
 }
 
 // ReadBinary reads file name and file content from a connection and save it.
@@ -143,7 +170,7 @@ func WriteBytes(writer io.Writer, b []byte) (n int, err error) {
 // total bytes sent = file size.
 // writer is likely to be net.Conn. File size cannot exceed max value of uint32
 // as of now. We can split files or change the data type to uint64 if time allows.
-func WriteBinary(writer io.Writer, filePath string) (uint32, error) {
+func WriteBinary(writer io.Writer, filePath string) (int, error) {
 	// Open source file to send
 	srcFile, err := os.Open(filePath)
 	if err != nil {
@@ -194,7 +221,7 @@ func WriteBinary(writer io.Writer, filePath string) (uint32, error) {
 
 	// Write file to writer
 	writtenSize, err := readWrite(srcFile, writer, srcFileSize)
-	if writtenSize != srcFileSize || err != nil {
+	if err != nil || writtenSize != int(srcFileSize) {
 		log.Debug(err)
 		log.Error("Error while writing binary file")
 		return writtenSize, err
@@ -282,7 +309,7 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		}
 	}(tmpFile.Name())
 
-	if writtenSize, err := readWrite(reader, tmpFile, n); writtenSize != n || err != nil {
+	if writtenSize, err := readWrite(reader, tmpFile, n); writtenSize != int(n) || err != nil {
 		log.Debug(err)
 		log.Error("Error while reading from reader and writing to temp file")
 		return err
@@ -326,55 +353,37 @@ func readNBytes(reader io.Reader, n uint32) ([]byte, error) {
 	return buffer, err
 }
 
+// readNBytes reads up to nth byte
+func readNBytesPointer(reader io.Reader, buffer *[]byte) error {
+	_, err := io.ReadFull(reader, *buffer)
+	return err
+}
+
 // readWrite is a helper function to read exactly size bytes from reader and write it to writer.
 // Returns length of bytes written and error, if any. Error = nil only if length of bytes
 // written = size.
-func readWrite(reader io.Reader, writer io.Writer, size uint32) (uint32, error) {
-	var totalReceived uint32 = 0
-	var receivedLen int
-	var err error
-	var buffSize uint32
-
-	// Determine buffer size
-	if size < BufferSize {
-		buffSize = size
-	} else {
-		buffSize = BufferSize
-	}
-
-	// Create buffer
-	buffer := make([]byte, buffSize)
-
-	// Repeat downloading until the file is fully received
-	for totalReceived < size {
-		// Last portion of the data
-		if totalReceived+buffSize > size {
-			buffer, err = io.ReadAll(io.LimitReader(reader, int64(size-totalReceived)))
-			receivedLen = len(buffer)
-			// If reader contains less than expected size
-			if totalReceived+uint32(receivedLen) != size {
-				log.Error("File not fully received")
-				return totalReceived + uint32(receivedLen), errors.New("unexpected EOF")
-			}
-		} else {
-			receivedLen, err = io.ReadFull(reader, buffer)
+func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
+	totalReceived := 0
+	intSize := int(size)
+	readSize := BufferSize
+	buffer := bufPool.Get().([]byte)
+	for totalReceived < intSize {
+		if totalReceived+BufferSize > intSize {
+			readSize = intSize - totalReceived
 		}
-
-		if err != nil {
+		read, err := io.ReadFull(reader, buffer[:readSize])
+		if err != nil || read != readSize {
 			log.Debug(err)
-			log.Error("Error while receiving bytes")
 			return totalReceived, err
 		}
-
-		// Write to writer
-		writtenLen, err := writer.Write(buffer)
-		if writtenLen != receivedLen || err != nil {
+		written, err := writer.Write(buffer[:readSize])
+		totalReceived += written
+		if err != nil {
 			log.Debug(err)
-			log.Error("Error while writing to a file")
-			return totalReceived + uint32(writtenLen), err
+			return totalReceived, err
 		}
-		totalReceived += uint32(receivedLen)
 	}
+	bufPool.Put(buffer)
 	return totalReceived, nil
 }
 

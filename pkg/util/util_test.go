@@ -1103,3 +1103,111 @@ func CleanupHelper() {
 		log.Error("Existing directory not deleted, perhaps it does not exist?")
 	}
 }
+
+func TestReadBytesTemp(t *testing.T) {
+	var buf bytes.Buffer
+	var output bytes.Buffer
+
+	err := writeSize(&buf, 4100)
+	if err != nil {
+		t.Error()
+		return
+	}
+	testByte, err := ioutil.ReadFile("../testdata/test_4096.txt")
+	if err != nil {
+		t.Error(err)
+	}
+	buf.Write(testByte)
+	testByte = []byte("test")
+	buf.Write(testByte)
+	temp, err := ReadBytesToWriter(&buf, &output)
+	if err != nil || temp != 4100 {
+		t.Error(err)
+		return
+	}
+}
+
+func BenchmarkReadNBytes(b *testing.B) {
+	var buf bytes.Buffer
+	//testByte, err := ioutil.ReadFile("../testdata/test_4096.txt")
+	//if err != nil{
+	//	b.Error(err)
+	//}
+	testByte := []byte("test")
+	for i := 0; i < b.N; i++ {
+		buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		_, err := readNBytes(&buf, 4)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkReadNBytesPointer(b *testing.B) {
+	var buf bytes.Buffer
+	buffer := make([]byte, 4)
+	//testByte, err := ioutil.ReadFile("../testdata/test_4096.txt")
+	//if err != nil{
+	//	b.Error(err)
+	//}
+	testByte := []byte("test")
+	for i := 0; i < b.N; i++ {
+		buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		//buf.Write(testByte)
+		err := readNBytesPointer(&buf, &buffer)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkReadWrite(b *testing.B) {
+	var buf bytes.Buffer
+	for i := 0; i < b.N; i++ {
+		testFile, err := os.Open("../testdata/test_4096.txt")
+		if err != nil {
+			b.Error(err)
+		}
+
+		if _, err = readWrite(testFile, &buf, 4096); err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkReadBytesTemp(b *testing.B) {
+	var buf bytes.Buffer
+	var output bytes.Buffer
+
+	for i := 0; i < b.N; i++ {
+		err := writeSize(&buf, 4100)
+		if err != nil {
+			b.Error()
+			return
+		}
+		testByte, err := ioutil.ReadFile("../testdata/test_4096.txt")
+		if err != nil {
+			b.Error(err)
+		}
+		buf.Write(testByte)
+		buf.Write([]byte("test"))
+		temp, err := ReadBytesToWriter(&buf, &output)
+		if err != nil || temp != 4100 {
+			b.Error(err)
+			return
+		}
+	}
+}
