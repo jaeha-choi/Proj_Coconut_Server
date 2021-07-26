@@ -84,7 +84,7 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 
 // ReadBytesToWriter reads message from reader and write it to writer.
 // First four bytes of reader should be uint32 size of the message,
-// represent in big endian.
+// represented in big endian.
 // Common usage for this function is to read from net.Conn, and write to temp file.
 func ReadBytesToWriter(reader io.Reader, writer io.Writer) (n int, err error) {
 	// Read message size
