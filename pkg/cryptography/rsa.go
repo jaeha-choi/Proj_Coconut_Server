@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/pem"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io/ioutil"
@@ -16,7 +15,6 @@ import (
 
 const (
 	rsaKeyBitSize = 4096
-	SymKeySize    = 32
 )
 
 // createRSAKey creates RSA keys with bitSize.
@@ -175,19 +173,6 @@ func PemToSha256(pubBlock *pem.Block) []byte {
 	return hash[:]
 }
 
-// genSymKey generates random key for symmetric encryption
-func genSymKey() (key []byte, err error) {
-	// Since we're using AES, generate 32 bytes key for AES256
-	key = make([]byte, SymKeySize)
-	// Create random key for symmetric encryption
-	if _, err := rand.Read(key); err != nil {
-		log.Debug(err)
-		log.Error("Error while generating symmetric encryption key")
-		return nil, err
-	}
-	return key, nil
-}
-
 // EncryptSignMsg encrypts key for symmetric encryption with receiver's pubic key,
 // and sign hashed symmetric encryption key with sender's private key.
 func EncryptSignMsg(msg []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (
@@ -233,11 +218,4 @@ func DecryptVerifyMsg(encryptedMsg []byte, signature []byte, senderPubKey *rsa.P
 	}
 
 	return symKey, nil
-}
-
-// BytesToBase64 encodes raw bytes to base64
-func BytesToBase64(data []byte) []byte {
-	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(encoded, data[:])
-	return encoded
 }

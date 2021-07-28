@@ -3,6 +3,7 @@ package cryptography
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"os"
@@ -76,7 +77,7 @@ func TestGenAESKey(t *testing.T) {
 }
 
 func TestBytesToBase64(t *testing.T) {
-	encoded := BytesToBase64([]byte("test string"))
+	encoded := BytesToBase64(t, []byte("test string"))
 	if !bytes.Equal(encoded, []byte("dGVzdCBzdHJpbmc=")) {
 		t.Error("Error in BytesToBase64")
 		return
@@ -116,4 +117,12 @@ func TestKeyEncryptSignAESKey(t *testing.T) {
 		t.Error("Error in keyExchange")
 		return
 	}
+}
+
+// BytesToBase64 encodes raw bytes to base64
+func BytesToBase64(t *testing.T, data []byte) []byte {
+	t.Helper()
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	base64.StdEncoding.Encode(encoded, data[:])
+	return encoded
 }

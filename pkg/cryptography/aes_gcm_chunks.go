@@ -19,8 +19,9 @@ const (
 	// ChunkSize is a size of each file chunks in bytes.
 	// Should be less than max value of uint32 (4294967295)
 	// since the util package use unsigned 4 bytes to represent the data size.
-	ChunkSize = 16777216 // 2^24 bytes, about 16.7 MB
-	IvSize    = 12
+	ChunkSize  = 16777216 // 2^24 bytes, about 16.7 MB
+	IvSize     = 12
+	SymKeySize = 32
 
 	// MaxFileSize indicates theoretical limit for the file size. Because chunk number are
 	// indicated with uint16, MaxFileSize depends on ChunkSize. However, actual file limit
@@ -430,6 +431,19 @@ func (ag *AesGcmChunk) decryptBytes(encryptedData []byte, iv []byte) (decryptedD
 		return nil, err
 	}
 	return decryptedData, nil
+}
+
+// genSymKey generates random key for symmetric encryption
+func genSymKey() (key []byte, err error) {
+	// Since we're using AES, generate 32 bytes key for AES256
+	key = make([]byte, SymKeySize)
+	// Create random key for symmetric encryption
+	if _, err := rand.Read(key); err != nil {
+		log.Debug(err)
+		log.Error("Error while generating symmetric encryption key")
+		return nil, err
+	}
+	return key, nil
 }
 
 // Close closes working file
