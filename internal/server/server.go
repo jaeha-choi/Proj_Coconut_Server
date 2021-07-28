@@ -26,8 +26,11 @@ const (
 
 	Quit          = "QUIT"
 	RequestRelay  = "RELY"
+	EndRelay      = "ERLY"
 	GetAddCode    = "GADC"
 	RemoveAddCode = "RADC"
+	GetPubKey     = "GPUB"
+	ReqPubKey     = "RPUB"
 
 	// Response
 
@@ -351,11 +354,11 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 	//	return err
 	//}
 	// TODO: Replace WriteBytes with ReadUint once implemented
-	addCodeStr, err := util.ReadBytes(conn)
+	addCodeB, err := util.ReadBytes(conn)
 	if err != nil {
 		return err
 	}
-	addCode, err := strconv.Atoi(string(addCodeStr))
+	addCode, err := strconv.Atoi(string(addCodeB))
 	if err != nil {
 		return err
 	}
@@ -378,20 +381,67 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 
 	receiver := c.(*client)
 
-	written, err := util.ReadBytesToWriter(conn, receiver.connToClient)
-	if err != nil {
-		log.Debug(err)
-		log.Debug("Relayed bytes count: ", written)
-		log.Error("Error while relaying data")
-		return err
+	var endNow string
+	for endNow == EndRelay {
+		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
+		if err != nil {
+			log.Debug(err)
+			log.Debug("Relayed bytes count: ", written)
+			log.Error("Error while relaying data")
+			return err
+		}
+		end, err := util.ReadBytes(conn)
+		if err != nil {
+			log.Debug(err)
+			return err
+		}
+		endNow = string(end)
 	}
 
-	// Send status
-	_, err = util.WriteBytes(conn, []byte(Affirmation))
+	return nil
+}
+
+func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
+	rxAddCodeStr, err := util.ReadBytes(conn)
 	if err != nil {
+		return err
+	}
+	rxAddCode, err := strconv.Atoi(string(rxAddCodeStr))
+	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
+	serv.addCodeArrMutex.RLock()
+	rxPubKeyH := serv.addCodeArr[addCodeIdx][1].(string)
+	serv.addCodeArrMutex.RUnlock()
+
+	c, ok := serv.devices.Load(rxPubKeyH)
+	if !ok || c == nil {
+		log.Debug(ClientNotFoundError)
+		return ClientNotFoundError
+	}
+	cli := c.(*client)
+	if _, err := util.WriteString(cli.connToClient, ReqPubKey); err != nil {
+		log.Debug(err)
+		log.Error("Error while sending command to rx client")
+		return err
+	}
+	if _, err := util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
+		log.Debug(err)
+		log.Error("Error while relaying public key from rx")
 		return err
 	}
 	return nil
+}
+
+func writeResult(conn net.Conn, err error) {
+	if err != nil {
+		log.Debug(err)
+		if _, err := util.WriteBytes(conn, []byte(Negation)); err != nil {
+			log.Debug(err)
+		}
+	} else {
+		if _, err := util.WriteBytes(conn, []byte(Affirmation)); err != nil {
+			log.Debug(err)
+		}
+	}
 }
 
 func (serv *Server) connectionHandler(conn net.Conn) (err error) {
@@ -405,16 +455,11 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	}()
 
 	pubKeyHash, e := serv.handleInit(conn)
+	writeResult(conn, e)
 	if e != nil {
 		log.Debug(e)
 		log.Error("Error while initializing client")
-		if _, err := util.WriteBytes(conn, []byte(Negation)); err != nil {
-			log.Debug(err)
-		}
 		return e
-	}
-	if _, err := util.WriteBytes(conn, []byte(Affirmation)); err != nil {
-		log.Debug(err)
 	}
 
 	// Since defer calls are executed in LIFO order, this defer statement
@@ -440,22 +485,16 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			e = serv.handleRemoveAddCode(conn, pubKeyHash)
 		case RequestRelay:
 			e = serv.handleRequestRelay(conn)
+		case GetPubKey:
+			e = serv.handleGetPubKey(conn)
 		case Quit:
 			isQuit = true
 		default:
 			log.Debug(UnknownCommandError)
 			return UnknownCommandError
 		}
-		if e != nil {
-			log.Debug(e)
-			err = e
-			if _, err := util.WriteBytes(conn, []byte(Negation)); err != nil {
-				log.Debug(err)
-			}
-		}
-		if _, err := util.WriteBytes(conn, []byte(Affirmation)); err != nil {
-			log.Debug(err)
-		}
+		writeResult(conn, e)
+		err = e
 	}
 
 	return err
