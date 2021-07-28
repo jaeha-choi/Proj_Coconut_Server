@@ -1120,7 +1120,7 @@ func TestReadBytesTemp(t *testing.T) {
 	buf.Write(testByte)
 	testByte = []byte("test")
 	buf.Write(testByte)
-	temp, err := ReadBytesToWriter(&buf, &output)
+	temp, err := ReadBytesToWriter(&buf, &output, false)
 	if err != nil || temp != 4100 {
 		t.Error(err)
 		return
@@ -1204,7 +1204,7 @@ func BenchmarkReadBytesTemp(b *testing.B) {
 		}
 		buf.Write(testByte)
 		buf.Write([]byte("test"))
-		temp, err := ReadBytesToWriter(&buf, &output)
+		temp, err := ReadBytesToWriter(&buf, &output, false)
 		if err != nil || temp != 4100 {
 			b.Error(err)
 			return

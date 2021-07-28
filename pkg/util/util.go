@@ -86,12 +86,20 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 // First four bytes of reader should be uint32 size of the message,
 // represented in big endian.
 // Common usage for this function is to read from net.Conn, and write to temp file.
-func ReadBytesToWriter(reader io.Reader, writer io.Writer) (n int, err error) {
+func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
 	// Read message size
 	size, err := readSize(reader)
 	if err != nil {
 		log.Debug(err)
 		return 0, err
+	}
+
+	if writeWithSize {
+		err := writeSize(writer, size)
+		if err != nil {
+			log.Debug(err)
+			return 0, err
+		}
 	}
 
 	totalReceived, err := readWrite(reader, writer, size)
