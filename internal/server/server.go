@@ -335,11 +335,11 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 	//	return err
 	//}
 	// TODO: Replace WriteBytes with ReadUint once implemented
-	addCodeB, err := util.ReadBytes(conn)
+	addCodeStr, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
-	addCode, err := strconv.Atoi(string(addCodeB))
+	addCode, err := strconv.Atoi(addCodeStr)
 	if err != nil {
 		return err
 	}
@@ -350,11 +350,11 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 }
 
 func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
-	receiverPubKeyHash, err := util.ReadBytes(conn)
+	rxPubKeyHash, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
-	c, ok := serv.devices.Load(string(receiverPubKeyHash))
+	c, ok := serv.devices.Load(rxPubKeyHash)
 	if !ok || c == nil {
 		log.Debug(ClientNotFoundError)
 		return ClientNotFoundError
@@ -364,6 +364,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 
 	var endNow string
 	for endNow == commands.EndRelay {
+		// TODO: Send command/Result to rx?
 		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
 		if err != nil {
 			log.Debug(err)
@@ -383,11 +384,11 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 }
 
 func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
-	rxAddCodeStr, err := util.ReadBytes(conn)
+	rxAddCodeStr, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
-	rxAddCode, err := strconv.Atoi(string(rxAddCodeStr))
+	rxAddCode, err := strconv.Atoi(rxAddCodeStr)
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
 	serv.addCodeArrMutex.RLock()
 	rxPubKeyH := serv.addCodeArr[addCodeIdx][1].(string)
