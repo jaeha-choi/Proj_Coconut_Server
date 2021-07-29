@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/commands"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"gopkg.in/yaml.v3"
@@ -18,28 +19,8 @@ import (
 	"sync"
 )
 
-//type Command string
-
-// Commands and responses. Perhaps using string isn't necessary.
 const (
-	// Commands
-
-	Quit          = "QUIT"
-	RequestRelay  = "RELY"
-	EndRelay      = "ERLY"
-	GetAddCode    = "GADC"
-	RemoveAddCode = "RADC"
-	GetPubKey     = "GPUB"
-	ReqPubKey     = "RPUB"
-
-	// Response
-
-	Affirmation = "A"
-	Negation    = "N"
-)
-
-const (
-	// Name for the public/private key pair
+	// Name for the public/private key pair without extensions
 	keyPairName = "server"
 	// addCodeArrSize is the max number for Add Code
 	addCodeArrSize = 999999
@@ -382,7 +363,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 	receiver := c.(*client)
 
 	var endNow string
-	for endNow == EndRelay {
+	for endNow == commands.EndRelay {
 		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
 		if err != nil {
 			log.Debug(err)
@@ -418,7 +399,7 @@ func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
 		return ClientNotFoundError
 	}
 	cli := c.(*client)
-	if _, err := util.WriteString(cli.connToClient, ReqPubKey); err != nil {
+	if _, err := util.WriteString(cli.connToClient, commands.ReqPubKey); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending command to rx client")
 		return err
@@ -434,11 +415,11 @@ func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
 func writeResult(conn net.Conn, err error) {
 	if err != nil {
 		log.Debug(err)
-		if _, err := util.WriteBytes(conn, []byte(Negation)); err != nil {
+		if _, err := util.WriteBytes(conn, []byte(commands.Negation)); err != nil {
 			log.Debug(err)
 		}
 	} else {
-		if _, err := util.WriteBytes(conn, []byte(Affirmation)); err != nil {
+		if _, err := util.WriteBytes(conn, []byte(commands.Affirmation)); err != nil {
 			log.Debug(err)
 		}
 	}
@@ -479,15 +460,15 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			return err
 		}
 		switch string(command) {
-		case GetAddCode:
+		case commands.GetAddCode:
 			e = serv.handleGetAddCode(conn, pubKeyHash)
-		case RemoveAddCode:
+		case commands.RemoveAddCode:
 			e = serv.handleRemoveAddCode(conn, pubKeyHash)
-		case RequestRelay:
+		case commands.RequestRelay:
 			e = serv.handleRequestRelay(conn)
-		case GetPubKey:
+		case commands.GetPubKey:
 			e = serv.handleGetPubKey(conn)
-		case Quit:
+		case commands.Quit:
 			isQuit = true
 		default:
 			log.Debug(UnknownCommandError)
