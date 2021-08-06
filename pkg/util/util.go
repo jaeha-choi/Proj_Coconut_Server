@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
@@ -440,4 +441,11 @@ func WriteConfig(fileName string, config interface{}) (err error) {
 	}
 
 	return nil
+}
+
+// BytesToBase64 encodes raw bytes to base64-encoded bytes
+func BytesToBase64(data []byte) []byte {
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	base64.StdEncoding.Encode(encoded, data[:])
+	return encoded
 }

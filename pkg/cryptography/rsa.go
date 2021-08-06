@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,8 @@ import (
 const (
 	rsaKeyBitSize = 4096
 )
+
+var NoPemBlock = errors.New("[]byte does not contain public pem block")
 
 // createRSAKey creates RSA keys with bitSize.
 func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
@@ -171,6 +174,18 @@ func PemToSha256(pubBlock *pem.Block) []byte {
 	// sha256sum always returns 32 bytes
 	hash := sha256.Sum256(pubBlock.Bytes)
 	return hash[:]
+}
+
+// BytesToPemFile writes pemBytes to fileName in PEM block format.
+func BytesToPemFile(pemBytes []byte, fileName string) (err error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil || block.Type != "RSA PUBLIC KEY" {
+		return NoPemBlock
+	}
+	if err = os.WriteFile(fileName, block.Bytes, 0x600); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EncryptSignMsg encrypts key for symmetric encryption with receiver's pubic key,

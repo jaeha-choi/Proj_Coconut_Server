@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"os"
 	"testing"
 )
@@ -77,7 +78,7 @@ func TestGenAESKey(t *testing.T) {
 }
 
 func TestBytesToBase64(t *testing.T) {
-	encoded := BytesToBase64(t, []byte("test string"))
+	encoded := util.BytesToBase64([]byte("test string"))
 	if !bytes.Equal(encoded, []byte("dGVzdCBzdHJpbmc=")) {
 		t.Error("Error in BytesToBase64")
 		return
