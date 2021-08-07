@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -20,8 +21,6 @@ const (
 	DownloadPath = "./downloaded"
 )
 
-var SizeError = errors.New("size exceeded")
-
 var EmptyFileName = errors.New("empty filename")
 
 var bufPool = sync.Pool{
@@ -32,29 +31,9 @@ var bufPool = sync.Pool{
 }
 
 // ReadString reads string from a connection
-func ReadString(reader io.Reader) (string, error) {
-	// Read packet size (string size)
-	size, err := readSize(reader)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading string size")
-		return "", err
-	}
-
-	// ReadString always expect the size to be <= BufferSize
-	if size > BufferSize {
-		log.Error("String size cannot be greater than ", BufferSize, ". String size: ", size)
-		return "", SizeError
-	}
-
-	// Read string from the packet
-	str, err := readNString(reader, size)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading string")
-		return "", err
-	}
-	return str, nil
+func ReadString(reader io.Reader) (str string, err error) {
+	bytes, err := ReadBytes(reader)
+	return string(bytes), err
 }
 
 // ReadBytes reads b from reader.
@@ -74,13 +53,21 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 	//	return nil, SizeError
 	//}
 
+	// Read Error Code
+	readError, err := readErrorCode(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading error code")
+		return nil, err
+	}
+
 	// Read bytes from reader
 	if b, err = readNBytes(reader, size); err != nil {
 		log.Debug(err)
 		log.Error("Error raised by readNBytes")
 		return nil, err
 	}
-	return b, nil
+	return b, readError
 }
 
 // ReadBytesToWriter reads message from reader and write it to writer.
@@ -101,6 +88,10 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 			log.Debug(err)
 			return 0, err
 		}
+	}
+
+	if err = writeErrorCode(writer, nil); err != nil {
+		return 0, err
 	}
 
 	totalReceived, err := readWrite(reader, writer, size)
@@ -145,22 +136,30 @@ func ReadBinary(reader io.Reader) error {
 // length of msg cannot exceed BufferSize
 // Returns total bytes sent and error, if any.
 // err == nil only if length of sent bytes = length of msg
-func WriteString(writer io.Writer, msg string) (int, error) {
-	return WriteBytes(writer, []byte(msg))
+func WriteString(writer io.Writer, msg string, errorToWrite *common.Error) (int, error) {
+	return WriteBytes(writer, []byte(msg), errorToWrite)
 }
 
 // WriteBytes write b to writer.
 // Returns int indicating the number of bytes written, and error, if any.
-func WriteBytes(writer io.Writer, b []byte) (n int, err error) {
+func WriteBytes(writer io.Writer, b []byte, errorToWrite *common.Error) (n int, err error) {
 	//// Return error if b is too big
 	//if len(b) > BufferSize {
 	//	log.Error("Byte should contain less than ", BufferSize)
 	//	return 0, SizeError
 	//}
+
 	// Write size of the string to writer
-	if err := writeSize(writer, uint32(len(b))); err != nil {
+	if err = writeSize(writer, uint32(len(b))); err != nil {
 		log.Debug(err)
 		log.Error("Error while writing bytes size")
+		return 0, err
+	}
+
+	// Write Error Code
+	if err = writeErrorCode(writer, errorToWrite); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing error code")
 		return 0, err
 	}
 
@@ -215,7 +214,7 @@ func WriteBinary(writer io.Writer, filePath string) (int, error) {
 	_, fileN := filepath.Split(filePath)
 
 	// Send file name
-	if _, err := WriteString(writer, fileN); err != nil {
+	if _, err := WriteString(writer, fileN, nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending file name")
 		return 0, err
@@ -250,6 +249,24 @@ func readSize(reader io.Reader) (uint32, error) {
 	return binary.BigEndian.Uint32(b), nil
 }
 
+func readErrorCode(reader io.Reader) (readError *common.Error, err error) {
+	// Read 1 byte for the error code
+	b, err := readNBytes(reader, 1)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading packet size")
+		return nil, err
+	}
+	if b[0] != 0 {
+		readError = common.ErrorCodes[b[0]]
+		if readError == nil {
+			return common.UnknownCodeError, nil
+		}
+		return readError, nil
+	}
+	return nil, nil
+}
+
 // Uint32ToByte converts uint32 value to byte slices
 func Uint32ToByte(size uint32) []byte {
 	b := make([]byte, 4)
@@ -271,12 +288,21 @@ func ByteToUint16(b []byte) uint16 {
 
 // writeSize converts packet size to byte and write to writer
 // Take a look at encoding/gob package or protocol buffers for a better performance.
-func writeSize(writer io.Writer, size uint32) error {
+func writeSize(writer io.Writer, size uint32) (err error) {
 	// consider using array over slice for a better performance i.e: arr := [4]byte{}
-	_, err := writer.Write(Uint32ToByte(size))
-	if err != nil {
+	if _, err = writer.Write(Uint32ToByte(size)); err != nil {
 		log.Debug(err)
 		log.Error("Error while writing packet size")
+		return err
+	}
+	return nil
+}
+
+func writeErrorCode(writer io.Writer, errorToWrite *common.Error) (err error) {
+	// Write 1 byte of error code
+	if _, err = writer.Write([]byte{errorToWrite.ErrCode}); err != nil {
+		log.Debug(err)
+		log.Error("Error while reading packet size")
 		return err
 	}
 	return nil
@@ -357,6 +383,9 @@ func readNString(reader io.Reader, n uint32) (string, error) {
 
 // readNBytes reads up to nth byte
 func readNBytes(reader io.Reader, n uint32) ([]byte, error) {
+	if n == 0 {
+		return nil, nil
+	}
 	buffer := make([]byte, n)
 	_, err := io.ReadFull(reader, buffer)
 	return buffer, err
