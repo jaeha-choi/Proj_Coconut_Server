@@ -31,20 +31,20 @@ var bufPool = sync.Pool{
 }
 
 // ReadString reads string from a connection
-func ReadString(reader io.Reader) (str string, err error) {
-	bytes, err := ReadBytes(reader)
-	return string(bytes), err
+func ReadString(reader io.Reader) (str string, errorCode *common.Error, err error) {
+	bytes, errorCode, err := ReadBytes(reader)
+	return string(bytes), errorCode, err
 }
 
 // ReadBytes reads b from reader.
 // Returns error, if any.
-func ReadBytes(reader io.Reader) (b []byte, err error) {
+func ReadBytes(reader io.Reader) (b []byte, errorCode *common.Error, err error) {
 	// Read packet size
 	size, err := readSize(reader)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading packet size")
-		return nil, err
+		return nil, nil, err
 	}
 
 	//// ReadBytes always expect the size to be <= BufferSize
@@ -58,16 +58,16 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading error code")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Read bytes from reader
 	if b, err = readNBytes(reader, size); err != nil {
 		log.Debug(err)
 		log.Error("Error raised by readNBytes")
-		return nil, err
+		return nil, readError, err
 	}
-	return b, readError
+	return b, readError, nil
 }
 
 // ReadBytesToWriter reads message from reader and write it to writer.
@@ -104,7 +104,7 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 // ReadBinary reads file name and file content from a connection and save it.
 func ReadBinary(reader io.Reader) error {
 	// Read file name
-	fileN, err := ReadString(reader)
+	fileN, _, err := ReadString(reader)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading file name")
