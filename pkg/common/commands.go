@@ -12,7 +12,7 @@ const (
 	GetAddCode    Command = "GADC"
 	RemoveAddCode Command = "RADC"
 	GetPubKey     Command = "GPUB"
-	ReqPubKey     Command = "RPUB"
+	RequestPubKey Command = "RPUB"
 )
 
 func (c Command) String() string {

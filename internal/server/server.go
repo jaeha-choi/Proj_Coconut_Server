@@ -4,9 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"github.com/jaeha-choi/Proj_Coconut_Utility/commands"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"gopkg.in/yaml.v3"
@@ -20,10 +19,12 @@ import (
 )
 
 const (
-	// Name for the public/private key pair without extensions
+	// keyPairName is a name for the public/private key pair (without extensions)
 	keyPairName = "server"
 	// addCodeArrSize is the max number for Add Code
 	addCodeArrSize = 999999
+
+	debugClientNameLen = 5
 )
 
 type client struct {
@@ -57,19 +58,11 @@ type Server struct {
 	// nextAddCodeIdx represents index of next available Add Code element in addCodeArr
 	nextAddCodeIdx int
 
-	// devices stores public key hash as a key (string), client structure as a value.
+	// devices stores public key hash as a key (string), *client structure as a value.
 	devices sync.Map
 
 	tls *tls.Config
 }
-
-var NoAvailableAddCodeError = errors.New("no available add code error")
-
-var UnknownCommandError = errors.New("unknown command error")
-
-var ClientNotFoundError = errors.New("client not found error")
-
-var PubKeyMismatchError = errors.New("public key mismatch")
 
 // init initializes logger and set mRand seed
 func init() {
@@ -172,6 +165,21 @@ func ReadConfig(fileName string) (serv *Server, err error) {
 }
 
 func (serv *Server) removeDevice(pubKeyHash string) {
+	// Detach Add Code from the client in case the client is still using the Add Code
+	c, ok := serv.devices.Load(pubKeyHash)
+	if ok && c != nil {
+		cli := c.(*client)
+		if cli.addCodeIdx != -1 {
+			// Write lock
+			serv.addCodeArrMutex.Lock()
+			// Mark the Add Code as available, by setting pubKeyH field to empty string
+			serv.addCodeArr[cli.addCodeIdx][1] = ""
+			serv.addCodeArrMutex.Unlock()
+
+			cli.addCodeIdx = -1
+		}
+	}
+
 	// Remove device from map
 	serv.devices.Delete(pubKeyHash)
 }
@@ -185,7 +193,7 @@ func (serv *Server) removeAddCode(addCode int, pubKeyHash string) (err error) {
 
 	// Client does not own this Add Code
 	if pubKeyHash != pubKeyH {
-		return PubKeyMismatchError
+		return common.PubKeyMismatchError
 	}
 
 	// Write lock
@@ -197,8 +205,8 @@ func (serv *Server) removeAddCode(addCode int, pubKeyHash string) (err error) {
 	// Update client struct field
 	c, ok := serv.devices.Load(pubKeyHash)
 	if !ok || c == nil {
-		log.Debug(ClientNotFoundError)
-		return ClientNotFoundError
+		log.Debug(common.ClientNotFoundError)
+		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
 	cli.addCodeIdx = -1
@@ -206,6 +214,7 @@ func (serv *Server) removeAddCode(addCode int, pubKeyHash string) (err error) {
 	// Log
 	//log.Debug("removeDev//addCodeArr: ", serv.addCodeArr[addCodeIdx])
 	//log.Debug(serv.devices.Load(pubKeyH))
+
 	return nil
 }
 
@@ -228,8 +237,8 @@ func (serv *Server) addDevice(pubKeyHash string, conn net.Conn) {
 func (serv *Server) getAddCode(pubKeyHash string) (addCode int, err error) {
 	c, ok := serv.devices.Load(pubKeyHash)
 	if !ok || c == nil {
-		log.Debug(ClientNotFoundError)
-		return -1, ClientNotFoundError
+		log.Debug(common.ClientNotFoundError)
+		return -1, common.ClientNotFoundError
 	}
 
 	cli := c.(*client)
@@ -265,7 +274,7 @@ func (serv *Server) getAddCode(pubKeyHash string) (addCode int, err error) {
 		// If every possible code is taken, return error
 		if retry == addCodeArrSize {
 			log.Error("Every add code is being used")
-			return -1, NoAvailableAddCodeError
+			return -1, common.NoAvailableAddCodeError
 		}
 	}
 	// Get Add Code
@@ -290,52 +299,46 @@ func (serv *Server) getAddCode(pubKeyHash string) (addCode int, err error) {
 	// Log
 	//log.Debug("addDev//addCodeArr: ", serv.addCodeArr[serv.nextAddCodeIdx-1])
 	//log.Debug(serv.devices.Load(pubKeyHash))
+
 	return addCode, nil
 }
 
 func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
-	pubKeyHash, err := util.ReadBytes(conn)
+	pubKeyHash, _, err := util.ReadBytes(conn)
 	if err != nil {
 		return "", err
 	}
-	pubKeyHashStr := string(pubKeyHash)
+	//pubKeyHashStr := string(pubKeyHash)
+	pubKeyHashStr := string(util.BytesToBase64(pubKeyHash))
 	serv.addDevice(pubKeyHashStr, conn)
+
+	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Added")
+
 	return pubKeyHashStr, nil
 }
 
-func (serv *Server) handleQuit(pubKeyHash string) (err error) {
-	//pubKeyHash, err := util.ReadBytes(conn)
-	//if err != nil {
-	//	return err
-	//}
+func (serv *Server) handleQuit(pubKeyHash string) {
 	serv.removeDevice(pubKeyHash)
-	return nil
+	log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Unregistered")
 }
 
 func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	//pubKeyHash, err := util.ReadBytes(conn)
-	//if err != nil {
-	//	return err
-	//}
-	addCode, e := serv.getAddCode(pubKeyHash)
-	// TODO: Replace WriteBytes with WriteUint once implemented
-	_, err = util.WriteBytes(conn, []byte(strconv.Itoa(addCode)))
-	if e != nil {
-		return e
-	}
+	addCode, err := serv.getAddCode(pubKeyHash)
 	if err != nil {
 		return err
 	}
+	_, err = util.WriteString(conn, fmt.Sprintf("%06d", addCode), nil)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("Client %s: Allocated Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
+
 	return nil
 }
 
 func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	//pubKeyHash, err := util.ReadBytes(conn)
-	//if err != nil {
-	//	return err
-	//}
-	// TODO: Replace WriteBytes with ReadUint once implemented
-	addCodeStr, err := util.ReadString(conn)
+	addCodeStr, _, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
@@ -346,24 +349,28 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 	if err = serv.removeAddCode(addCode, pubKeyHash); err != nil {
 		return err
 	}
+
+	log.Debugf("Client %s: Freed Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
+
 	return nil
 }
 
+// TODO: Work in progress
 func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
-	rxPubKeyHash, err := util.ReadString(conn)
+	rxPubKeyHash, _, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
 	c, ok := serv.devices.Load(rxPubKeyHash)
 	if !ok || c == nil {
-		log.Debug(ClientNotFoundError)
-		return ClientNotFoundError
+		log.Debug(common.ClientNotFoundError)
+		return common.ClientNotFoundError
 	}
 
 	receiver := c.(*client)
 
 	var endNow string
-	for endNow == commands.EndRelay {
+	for endNow == common.EndRelay.String() {
 		// TODO: Send command/Result to rx?
 		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
 		if err != nil {
@@ -372,19 +379,20 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 			log.Error("Error while relaying data")
 			return err
 		}
-		end, err := util.ReadBytes(conn)
-		if err != nil {
-			log.Debug(err)
-			return err
-		}
-		endNow = string(end)
+		// TODO: Fix
+		//end, err := util.ReadBytes(conn)
+		//if err != nil {
+		//	log.Debug(err)
+		//	return err
+		//}
+		//endNow = string(end)
 	}
 
 	return nil
 }
 
-func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
-	rxAddCodeStr, err := util.ReadString(conn)
+func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
+	rxAddCodeStr, _, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
@@ -396,37 +404,51 @@ func (serv *Server) handleGetPubKey(conn net.Conn) (err error) {
 
 	c, ok := serv.devices.Load(rxPubKeyH)
 	if !ok || c == nil {
-		log.Debug(ClientNotFoundError)
-		return ClientNotFoundError
+		log.Debug(common.ClientNotFoundError)
+		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
-	if _, err := util.WriteString(cli.connToClient, commands.ReqPubKey); err != nil {
+	if _, err = util.WriteString(cli.connToClient, common.GetPubKey.String(), nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending command to rx client")
 		return err
 	}
-	if _, err := util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
+
+	defer func() {
+		_ = writeResult(cli.connToClient, err)
+	}()
+
+	if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
 		log.Debug(err)
 		log.Error("Error while relaying public key from rx")
+
 		return err
 	}
 	return nil
 }
 
-func writeResult(conn net.Conn, err error) {
-	if err != nil {
-		log.Debug(err)
-		if _, err := util.WriteBytes(conn, []byte(commands.Negation)); err != nil {
-			log.Debug(err)
+func writeResult(conn net.Conn, errorToWrite error) (err error) {
+	var e *common.Error
+	if errorToWrite != nil {
+		log.Debug(errorToWrite)
+		cErr, ok := errorToWrite.(*common.Error)
+		if ok {
+			e = cErr
+		} else {
+			e = common.GeneralServerError
 		}
 	} else {
-		if _, err := util.WriteBytes(conn, []byte(commands.Affirmation)); err != nil {
-			log.Debug(err)
-		}
+		e = nil
 	}
+	if _, err = util.WriteBytes(conn, nil, e); err != nil {
+		log.Debug(err)
+		return err
+	}
+	return nil
 }
 
 func (serv *Server) connectionHandler(conn net.Conn) (err error) {
+	// Close connection after using
 	defer func() {
 		if e := conn.Close(); e != nil {
 			log.Debug(e)
@@ -436,47 +458,50 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		}
 	}()
 
-	pubKeyHash, e := serv.handleInit(conn)
-	writeResult(conn, e)
-	if e != nil {
-		log.Debug(e)
+	// If initialization fails, attempt to write the error code
+	// to the client, then close the connection
+	pubKeyHash, err := serv.handleInit(conn)
+	if _ = writeResult(conn, err); err != nil {
+		log.Debug(err)
 		log.Error("Error while initializing client")
-		return e
+		return err
 	}
 
+	// If initialization succeeds, make sure the client switch to offline properly;
+	// If the client was using Add Code, mark it as available and remove the client
+	// from "online" list
+	//
 	// Since defer calls are executed in LIFO order, this defer statement
 	// will be called before the defer statement above
 	defer func() {
-		if e := serv.handleQuit(pubKeyHash); e != nil {
-			log.Debug(e)
-			err = e
-			return
-		}
+		serv.handleQuit(pubKeyHash)
 	}()
 
 	isQuit := false
 	for !isQuit {
-		command, err := util.ReadBytes(conn)
-		if err != nil {
-			return err
+		command, _, e := util.ReadString(conn)
+		if e != nil {
+			return e
 		}
-		switch string(command) {
-		case commands.GetAddCode:
-			e = serv.handleGetAddCode(conn, pubKeyHash)
-		case commands.RemoveAddCode:
-			e = serv.handleRemoveAddCode(conn, pubKeyHash)
-		case commands.RequestRelay:
-			e = serv.handleRequestRelay(conn)
-		case commands.GetPubKey:
-			e = serv.handleGetPubKey(conn)
-		case commands.Quit:
+		log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Command//" + command)
+		switch command {
+		case common.GetAddCode.String():
+			err = serv.handleGetAddCode(conn, pubKeyHash)
+		case common.RemoveAddCode.String():
+			err = serv.handleRemoveAddCode(conn, pubKeyHash)
+		case common.RequestRelay.String():
+			err = serv.handleRequestRelay(conn)
+		case common.RequestPubKey.String():
+			err = serv.handleRequestPubKey(conn)
+		case common.Quit.String():
 			isQuit = true
 		default:
-			log.Debug(UnknownCommandError)
-			return UnknownCommandError
+			log.Debug(common.UnknownCommandError)
+			return common.UnknownCommandError
 		}
-		writeResult(conn, e)
-		err = e
+		if err = writeResult(conn, err); err != nil {
+			return err
+		}
 	}
 
 	return err
@@ -505,9 +530,9 @@ func (serv *Server) Start() (err error) {
 			log.Warning("Error while accepting connection")
 			return err
 		}
+		log.Info("--- New connection established ---")
 		log.Debug("RemoteAddr: ", tlsConn.RemoteAddr())
 		log.Debug("LocalAddr: ", tlsConn.LocalAddr())
-		log.Info("Connection established")
 		go func() {
 			if e := serv.connectionHandler(tlsConn); e != nil {
 				log.Debug(e)
