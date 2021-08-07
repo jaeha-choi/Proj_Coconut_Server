@@ -299,8 +299,12 @@ func writeSize(writer io.Writer, size uint32) (err error) {
 }
 
 func writeErrorCode(writer io.Writer, errorToWrite *common.Error) (err error) {
+	var code uint8 = 0
+	if errorToWrite != nil {
+		code = errorToWrite.ErrCode
+	}
 	// Write 1 byte of error code
-	if _, err = writer.Write([]byte{errorToWrite.ErrCode}); err != nil {
+	if _, err = writer.Write([]byte{code}); err != nil {
 		log.Debug(err)
 		log.Error("Error while reading packet size")
 		return err
