@@ -304,7 +304,7 @@ func (serv *Server) getAddCode(pubKeyHash string) (addCode int, err error) {
 }
 
 func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
-	pubKeyHash, _, err := util.ReadBytes(conn)
+	pubKeyHash, err := util.ReadBytes(conn)
 	if err != nil {
 		return "", err
 	}
@@ -327,7 +327,7 @@ func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err erro
 	if err != nil {
 		return err
 	}
-	_, err = util.WriteString(conn, fmt.Sprintf("%06d", addCode), nil)
+	_, err = util.WriteString(conn, fmt.Sprintf("%06d", addCode))
 	if err != nil {
 		return err
 	}
@@ -338,7 +338,7 @@ func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err erro
 }
 
 func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	addCodeStr, _, err := util.ReadString(conn)
+	addCodeStr, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
@@ -357,7 +357,7 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 
 // TODO: Work in progress
 func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
-	rxPubKeyHash, _, err := util.ReadString(conn)
+	rxPubKeyHash, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 }
 
 func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
-	rxAddCodeStr, _, err := util.ReadString(conn)
+	rxAddCodeStr, err := util.ReadString(conn)
 	if err != nil {
 		return err
 	}
@@ -408,7 +408,7 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
-	if _, err = util.WriteString(cli.connToClient, common.GetPubKey.String(), nil); err != nil {
+	if _, err = util.WriteString(cli.connToClient, common.GetPubKey.String()); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending command to rx client")
 		return err
@@ -440,7 +440,7 @@ func writeResult(conn net.Conn, errorToWrite error) (err error) {
 	} else {
 		e = nil
 	}
-	if _, err = util.WriteBytes(conn, nil, e); err != nil {
+	if _, err = util.WriteBytesErr(conn, nil, e); err != nil {
 		log.Debug(err)
 		return err
 	}
@@ -479,10 +479,11 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 
 	isQuit := false
 	for !isQuit {
-		command, _, e := util.ReadString(conn)
+		c, _, e := util.ReadBytesErr(conn)
 		if e != nil {
 			return e
 		}
+		command := string(c)
 		log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Command//" + command)
 		switch command {
 		case common.GetAddCode.String():
