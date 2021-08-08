@@ -31,14 +31,22 @@ var bufPool = sync.Pool{
 }
 
 // ReadString reads string from a connection
-func ReadString(reader io.Reader) (str string, errorCode *common.Error, err error) {
-	bytes, errorCode, err := ReadBytes(reader)
-	return string(bytes), errorCode, err
+func ReadString(reader io.Reader) (str string, err error) {
+	bytes, err := ReadBytes(reader)
+	return string(bytes), err
 }
 
-// ReadBytes reads b from reader.
+func ReadBytes(reader io.Reader) (b []byte, err error) {
+	var errCode *common.Error
+	if b, errCode, err = ReadBytesErr(reader); err != nil {
+		return b, err
+	}
+	return b, errCode
+}
+
+// ReadBytesErr reads b from reader.
 // Returns error, if any.
-func ReadBytes(reader io.Reader) (b []byte, errorCode *common.Error, err error) {
+func ReadBytesErr(reader io.Reader) (b []byte, errorCode *common.Error, err error) {
 	// Read packet size
 	size, err := readSize(reader)
 	if err != nil {
@@ -104,7 +112,7 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 // ReadBinary reads file name and file content from a connection and save it.
 func ReadBinary(reader io.Reader) error {
 	// Read file name
-	fileN, _, err := ReadString(reader)
+	fileN, err := ReadString(reader)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading file name")
@@ -136,13 +144,17 @@ func ReadBinary(reader io.Reader) error {
 // length of msg cannot exceed BufferSize
 // Returns total bytes sent and error, if any.
 // err == nil only if length of sent bytes = length of msg
-func WriteString(writer io.Writer, msg string, errorToWrite *common.Error) (int, error) {
-	return WriteBytes(writer, []byte(msg), errorToWrite)
+func WriteString(writer io.Writer, msg string) (int, error) {
+	return WriteBytes(writer, []byte(msg))
 }
 
-// WriteBytes write b to writer.
+func WriteBytes(writer io.Writer, b []byte) (int, error) {
+	return WriteBytesErr(writer, b, nil)
+}
+
+// WriteBytesErr write b to writer.
 // Returns int indicating the number of bytes written, and error, if any.
-func WriteBytes(writer io.Writer, b []byte, errorToWrite *common.Error) (n int, err error) {
+func WriteBytesErr(writer io.Writer, b []byte, errorToWrite *common.Error) (n int, err error) {
 	//// Return error if b is too big
 	//if len(b) > BufferSize {
 	//	log.Error("Byte should contain less than ", BufferSize)
@@ -214,7 +226,7 @@ func WriteBinary(writer io.Writer, filePath string) (int, error) {
 	_, fileN := filepath.Split(filePath)
 
 	// Send file name
-	if _, err := WriteString(writer, fileN, nil); err != nil {
+	if _, err := WriteString(writer, fileN); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending file name")
 		return 0, err
