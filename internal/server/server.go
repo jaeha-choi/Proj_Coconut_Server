@@ -312,7 +312,7 @@ func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
 	pubKeyHashStr := string(util.BytesToBase64(pubKeyHash))
 	serv.addDevice(pubKeyHashStr, conn)
 
-	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Added")
+	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
 
 	return pubKeyHashStr, nil
 }
@@ -532,8 +532,8 @@ func (serv *Server) Start() (err error) {
 			return err
 		}
 		log.Info("--- New connection established ---")
-		log.Debug("RemoteAddr: ", tlsConn.RemoteAddr())
-		log.Debug("LocalAddr: ", tlsConn.LocalAddr())
+		log.Info("RemoteAddr: ", tlsConn.RemoteAddr())
+		log.Info("LocalAddr: ", tlsConn.LocalAddr())
 		go func() {
 			if e := serv.connectionHandler(tlsConn); e != nil {
 				log.Debug(e)
