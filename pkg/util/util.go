@@ -37,11 +37,16 @@ func ReadString(reader io.Reader) (str string, err error) {
 }
 
 func ReadBytes(reader io.Reader) (b []byte, err error) {
-	var errCode *common.Error
-	if b, errCode, err = ReadBytesErr(reader); err != nil {
+	b, errCode, err := ReadBytesErr(reader)
+	if err != nil {
 		return b, err
 	}
-	return b, errCode
+	// Next four lines CANNOT be replaced with "return b, errCode"
+	// This is because errCode nil and nil are different types.
+	if errCode != nil {
+		return b, errCode
+	}
+	return b, nil
 }
 
 // ReadBytesErr reads b from reader.
