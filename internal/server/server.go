@@ -66,7 +66,6 @@ type Server struct {
 
 // init initializes logger and set mRand seed
 func init() {
-	log.Init(os.Stdout, log.DEBUG)
 	var seed [8]byte
 	_, err := rand.Read(seed[:])
 	if err != nil {
@@ -135,7 +134,7 @@ func (serv *Server) tlsConfig() (err error) {
 	pair, err := tls.LoadX509KeyPair(filepath.Join(serv.CertPath, keyPairName+".crt"), filepath.Join(serv.CertPath, keyPairName+".key"))
 	if err != nil {
 		log.Debug(err)
-		log.Error("Error while loading .crt and .key file")
+		log.Error("Error while loading .crt and .key file--check if the files exist")
 		return err
 	}
 	serv.tls.Certificates = []tls.Certificate{pair}
