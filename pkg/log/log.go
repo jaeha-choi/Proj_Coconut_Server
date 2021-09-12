@@ -16,6 +16,7 @@ const (
 	INFO
 	WARNING
 	ERROR
+	FATAL
 )
 
 // Init initializes the logger
