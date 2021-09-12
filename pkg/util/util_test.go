@@ -50,14 +50,22 @@ func TestReadBinary(t *testing.T) {
 		return
 	}
 	srcFileSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(srcFileStat.Size())))
+	errCodeReader := bytes.NewReader([]byte{0})
+	errCodeReader2 := bytes.NewReader([]byte{0})
 
 	// Combine all readers
-	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
+	readers := io.MultiReader(destFileNSizeReader, errCodeReader, destFileNReader, srcFileSizeReader, errCodeReader2, srcFileReader)
 
-	err = ReadBinary(readers)
+	errCode, err := ReadBinary(readers)
 
 	if err != nil {
 		log.Debug(err)
+		t.Error("Error in ReadBinary")
+		return
+	}
+
+	if errCode != nil {
+		log.Debug(errCode)
 		t.Error("Error in ReadBinary")
 		return
 	}
@@ -113,7 +121,7 @@ func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 	// Combine all readers
 	readers := io.MultiReader(fileNFileSizeReader, fileNFile)
 
-	if err = ReadBinary(readers); err == nil {
+	if errCode, err := ReadBinary(readers); err == nil || errCode != nil {
 		t.Error("Expected error, but no error was raised.")
 		return
 	}
@@ -154,7 +162,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 	// Combine all readers
 	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
 
-	if err := ReadBinary(readers); err == nil {
+	if _, err := ReadBinary(readers); err == nil {
 		t.Error("Expected error, but no error was raised.")
 		return
 	}
@@ -189,7 +197,7 @@ func TestReadBinaryIncorrectFileSize(t *testing.T) {
 	// Combine all readers
 	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader)
 
-	if err := ReadBinary(readers); err == nil {
+	if _, err := ReadBinary(readers); err == nil {
 		t.Error("Expected error, but no error was raised.")
 	}
 }
@@ -230,7 +238,7 @@ func TestReadBinaryShortReader(t *testing.T) {
 	// Combine all readers
 	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, limitedFile)
 
-	if err := ReadBinary(readers); err == nil {
+	if _, err := ReadBinary(readers); err == nil {
 		t.Error("Expected error, but no error was raised.")
 	}
 }
@@ -289,6 +297,11 @@ func TestWriteString(t *testing.T) {
 		t.Error("Size does not match")
 	}
 
+	if errCode, err := readErrorCode(&buffer); err != nil || errCode != nil {
+		log.Debug(err)
+		t.Error("Error while reading error Code")
+	}
+
 	// Read the rest (since this test does not contain any other data)
 	b, err := ioutil.ReadAll(&buffer)
 	if err != nil {
@@ -300,7 +313,7 @@ func TestWriteString(t *testing.T) {
 	// Verify string
 	if msg != string(b) {
 		log.Debug(string(b))
-		t.Error("Result does mismatch")
+		t.Error("Result mismatch")
 		return
 	}
 }
@@ -439,7 +452,7 @@ func TestReadWriteBinary(t *testing.T) {
 	}
 
 	// Test ReadBinary
-	if err := ReadBinary(&buffer); err != nil {
+	if _, err := ReadBinary(&buffer); err != nil {
 		log.Debug(err)
 		t.Error("Error in ReadBinary")
 		return
@@ -587,8 +600,9 @@ func TestReadString(t *testing.T) {
 
 	sizeBytes := sizeToBytesHelper(t, uint32(len(testStr)))
 	sizeReader := bytes.NewReader(sizeBytes)
+	errCodeReader := bytes.NewReader([]byte{0})
 	strReader := bytes.NewReader([]byte(testStr))
-	reader := io.MultiReader(sizeReader, strReader)
+	reader := io.MultiReader(sizeReader, errCodeReader, strReader)
 
 	if resultStr, err := ReadString(reader); err != nil || resultStr != testStr {
 		log.Debug("Result: ", resultStr)
@@ -610,6 +624,7 @@ func TestReadStringSizeError(t *testing.T) {
 }
 
 func TestReadStringSizeMax(t *testing.T) {
+	//t.Skip()
 	// Open input file for testing
 	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
@@ -627,7 +642,9 @@ func TestReadStringSizeMax(t *testing.T) {
 	}()
 
 	sizeReader := bytes.NewReader(sizeToBytesHelper(t, 4096))
-	reader := io.MultiReader(sizeReader, file)
+	errCodeReader := bytes.NewReader([]byte{0})
+
+	reader := io.MultiReader(sizeReader, errCodeReader, file)
 
 	result, err := ReadString(reader)
 	if err != nil {
@@ -651,7 +668,7 @@ func TestReadStringSizeMax(t *testing.T) {
 		return
 	}
 
-	if string(input) != result {
+	if string(input)[:4096] != result {
 		log.Debug("Input: ", string(input))
 		log.Debug("----------------")
 		log.Debug("Result: ", result)

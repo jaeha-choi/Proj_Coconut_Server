@@ -115,17 +115,17 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 }
 
 // ReadBinary reads file name and file content from a connection and save it.
-func ReadBinary(reader io.Reader) error {
+func ReadBinary(reader io.Reader) (errorCode *common.Error, err error) {
 	// Read file name
 	fileN, err := ReadString(reader)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading file name")
-		return err
+		return nil, err
 	}
 	if fileN == "" {
 		log.Error("File name cannot be empty")
-		return EmptyFileName
+		return nil, EmptyFileName
 	}
 
 	// Read file size
@@ -133,16 +133,23 @@ func ReadBinary(reader io.Reader) error {
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading file size")
-		return err
+		return nil, err
+	}
+
+	errCode, err := readErrorCode(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while getting status code")
+		return errCode, err
 	}
 
 	// Read file and save
 	if err := readNBinary(reader, size, fileN); err != nil {
 		log.Debug(err)
 		log.Error("Error while reading/saving binary file")
-		return err
+		return errCode, err
 	}
-	return nil
+	return errCode, nil
 }
 
 // WriteString writes msg to writer
@@ -241,6 +248,13 @@ func WriteBinary(writer io.Writer, filePath string) (int, error) {
 	if err := writeSize(writer, srcFileSize); err != nil {
 		log.Debug(err)
 		log.Error("Error while writing string size")
+		return 0, err
+	}
+
+	// Write ErrorCode
+	if err := writeErrorCode(writer, nil); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing error code")
 		return 0, err
 	}
 
