@@ -173,17 +173,23 @@ func WriteBytesErr(writer io.Writer, b []byte, errorToWrite *common.Error) (n in
 	//	return 0, SizeError
 	//}
 
-	// Write size of the string to writer
-	if err = writeSize(writer, uint32(len(b))); err != nil {
+	// Check b len
+	size, err := IntToUint32(len(b))
+	if err != nil {
 		log.Debug(err)
-		log.Error("Error while writing bytes size")
 		return 0, err
 	}
 
-	// Write Error Code
-	if err = writeErrorCode(writer, errorToWrite); err != nil {
+	// Get error code
+	var code uint8 = 0
+	if errorToWrite != nil {
+		code = errorToWrite.ErrCode
+	}
+
+	// Write size (first 4 bytes) and error code (last 1 byte)
+	if _, err = writer.Write(append(Uint32ToByte(size), code)); err != nil {
 		log.Debug(err)
-		log.Error("Error while writing error code")
+		log.Error("Error while writing packet size")
 		return 0, err
 	}
 
@@ -227,7 +233,7 @@ func WriteBinary(writer io.Writer, filePath string) (int, error) {
 	}
 
 	// If file is too big to send, return error.
-	srcFileSize, err := IntToUint32(srcFileStat.Size())
+	srcFileSize, err := Int64ToUint32(srcFileStat.Size())
 	if err != nil {
 		log.Debug(err)
 		log.Error("File exceeds size limit")
@@ -460,9 +466,19 @@ func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
 	return totalReceived, nil
 }
 
+// Int64ToUint32 converts int64 value to uint32.
+// Returns value and error. If value occurs overflow, 0 and error is returned
+func Int64ToUint32(n int64) (uint32, error) {
+	if n < 0 || n > Uint32Max {
+		log.Error("value ", n, " overflows uint32")
+		return 0, errors.New("value overflows uint32")
+	}
+	return uint32(n), nil
+}
+
 // IntToUint32 converts int64 value to uint32.
 // Returns value and error. If value occurs overflow, 0 and error is returned
-func IntToUint32(n int64) (uint32, error) {
+func IntToUint32(n int) (uint32, error) {
 	if n < 0 || n > Uint32Max {
 		log.Error("value ", n, " overflows uint32")
 		return 0, errors.New("value overflows uint32")

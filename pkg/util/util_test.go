@@ -1023,21 +1023,21 @@ func TestReadNStringExceed(t *testing.T) {
 }
 
 func TestIntToUint32SignedInt(t *testing.T) {
-	if val, err := IntToUint32(-1); val != 0 || err == nil {
+	if val, err := Int64ToUint32(-1); val != 0 || err == nil {
 		t.Error("Expected error, but no error raised.")
 		return
 	}
 }
 
 func TestIntToUint32Max(t *testing.T) {
-	if val, err := IntToUint32(4294967296); val != 0 || err == nil {
+	if val, err := Int64ToUint32(4294967296); val != 0 || err == nil {
 		t.Error("Expected error, but no error raised.")
 		return
 	}
 }
 
 func TestIntToUint32(t *testing.T) {
-	if val, err := IntToUint32(27532); val != 27532 || err != nil {
+	if val, err := Int64ToUint32(27532); val != 27532 || err != nil {
 		log.Debug(err)
 		t.Error("Error during conversion")
 		return
