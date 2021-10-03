@@ -197,6 +197,13 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 			return err
 		}
 	}
+
+	// Close input file when done reading
+	if err := ag.file.Close(); err != nil {
+		log.Debug(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -350,6 +357,19 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 			return err
 		}
 	}
+
+	// Close output file when done writing
+	if err := ag.file.Close(); err != nil {
+		log.Debug(err)
+		// If rename was unsuccessful, remove temp file
+		if err := os.Remove(ag.file.Name()); err != nil {
+			log.Debug(err)
+			log.Error("Error while removing temp file. Temp file at: ", ag.file.Name())
+			return err
+		}
+		return err
+	}
+
 	// If file was fully processed, rename temp file to actual name
 	if ag.writeChunkNum == ag.chunkCount {
 		// Rename temporary file
@@ -444,9 +464,4 @@ func genSymKey() (key []byte, err error) {
 		return nil, err
 	}
 	return key, nil
-}
-
-// Close closes working file
-func (ag *AesGcmChunk) Close() (err error) {
-	return ag.file.Close()
 }

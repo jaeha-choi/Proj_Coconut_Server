@@ -20,7 +20,7 @@ func init() {
 }
 
 func TestReadBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -100,7 +100,7 @@ func TestReadBinary(t *testing.T) {
 }
 
 func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Use super long text for file name
 	dstFileNFile := "../testdata/test_8192.txt"
 	fileNFile, err := os.Open(dstFileNFile)
@@ -128,7 +128,7 @@ func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 }
 
 func TestReadBinaryEmptyFileNError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := ""
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -169,7 +169,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 }
 
 func TestReadBinaryIncorrectFileSize(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -203,7 +203,7 @@ func TestReadBinaryIncorrectFileSize(t *testing.T) {
 }
 
 func TestReadBinaryShortReader(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -319,7 +319,7 @@ func TestWriteString(t *testing.T) {
 }
 
 func TestReadNBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
@@ -379,7 +379,7 @@ func TestReadNBinary(t *testing.T) {
 }
 
 func TestReadNBinaryTiny(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 
 	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
@@ -440,7 +440,7 @@ func TestReadNBinaryTiny(t *testing.T) {
 }
 
 func TestReadWriteBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	srcFileN := "../testdata/cat.jpg"
 	var buffer bytes.Buffer
 
@@ -473,6 +473,12 @@ func TestReadWriteBinary(t *testing.T) {
 		t.Error("Error while opening dst file")
 		return
 	}
+	defer func() {
+		if err := result.Close(); err != nil {
+			log.Debug(err)
+			t.Error("Error while closing image file")
+		}
+	}()
 
 	// Compare checksum
 	if !ChecksumMatch(t, expected, result) {
@@ -482,7 +488,7 @@ func TestReadWriteBinary(t *testing.T) {
 }
 
 func TestReadNBinaryCreateDirError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
@@ -529,7 +535,7 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 }
 
 func TestReadNBinaryTinyWrongSize(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
 
@@ -561,7 +567,7 @@ func TestReadNBinaryTinyWrongSize(t *testing.T) {
 }
 
 func TestReadNBinaryTinyWrongSize2(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
@@ -841,90 +847,91 @@ func TestReadNString(t *testing.T) {
 	}
 }
 
-func TestReadNStringBufferSize(t *testing.T) {
-	// Open input file for testing
-	file, err := os.Open("../testdata/test_4096.txt")
-	if err != nil {
-		log.Debug(err)
-		t.Error("Cannot read the input file")
-		return
-	}
-
-	// Close file when done
-	defer func() {
-		if file != nil {
-			if err := file.Close(); err != nil {
-				log.Debug(err)
-				t.Error("Input file not properly closed")
-			}
-		}
-	}()
-
-	// Test readNString
-	reader := bufio.NewReader(file)
-	s, err := readNString(reader, 4096)
-	if err != nil {
-		log.Debug(err)
-		t.Error("readNString returned error")
-		return
-	}
-
-	// Create temp file
-	tmpFile, err := ioutil.TempFile("", "tmp")
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error while creating temp file")
-		return
-	}
-
-	// Close and delete temp file when done
-	defer func(name string) {
-		if err := tmpFile.Close(); err != nil {
-			log.Debug(err)
-			t.Error("Temp file not closed.")
-		}
-		// Disable this statement to prevent the program from deleting
-		// the file after testing
-		if err := os.Remove(name); err != nil {
-			log.Debug(err)
-			log.Info("Temp file: ", name)
-			t.Error("Temp file not removed.")
-		}
-	}(tmpFile.Name())
-
-	// Write to tmp file for debugging
-	if _, err := tmpFile.WriteString(s); err != nil {
-		log.Debug(err)
-		t.Error("Error while writing output file.")
-		return
-	}
-
-	// To guarantee the file to be written on disk before comparing
-	if err := tmpFile.Sync(); err != nil {
-		log.Debug(err)
-		t.Error("File not written to disk")
-		return
-	}
-
-	// Reset reader offset since the file was already read once
-	if _, err := file.Seek(0, 0); err != nil {
-		log.Debug(err)
-		t.Error("Error while resetting reader offset")
-		return
-	}
-
-	// Reset reader offset since the file was already read once
-	if _, err := tmpFile.Seek(0, 0); err != nil {
-		log.Debug(err)
-		t.Error("Error while setting reader offset")
-		return
-	}
-
-	if !ChecksumMatch(t, file, tmpFile) {
-		t.Error("checksum does not match")
-		return
-	}
-}
+// TODO: Fix or remove outdated test cases
+//func TestReadNStringBufferSize(t *testing.T) {
+//	// Open input file for testing
+//	file, err := os.Open("../testdata/test_4096.txt")
+//	if err != nil {
+//		log.Debug(err)
+//		t.Error("Cannot read the input file")
+//		return
+//	}
+//
+//	// Close file when done
+//	defer func() {
+//		if file != nil {
+//			if err := file.Close(); err != nil {
+//				log.Debug(err)
+//				t.Error("Input file not properly closed")
+//			}
+//		}
+//	}()
+//
+//	// Test readNString
+//	reader := bufio.NewReader(file)
+//	s, err := readNString(reader, 4096)
+//	if err != nil {
+//		log.Debug(err)
+//		t.Error("readNString returned error")
+//		return
+//	}
+//
+//	// Create temp file
+//	tmpFile, err := ioutil.TempFile("", "tmp")
+//	if err != nil {
+//		log.Debug(err)
+//		t.Error("Error while creating temp file")
+//		return
+//	}
+//
+//	// Close and delete temp file when done
+//	defer func(name string) {
+//		if err := tmpFile.Close(); err != nil {
+//			log.Debug(err)
+//			t.Error("Temp file not closed.")
+//		}
+//		// Disable this statement to prevent the program from deleting
+//		// the file after testing
+//		if err := os.Remove(name); err != nil {
+//			log.Debug(err)
+//			log.Info("Temp file: ", name)
+//			t.Error("Temp file not removed.")
+//		}
+//	}(tmpFile.Name())
+//
+//	// Write to tmp file for debugging
+//	if _, err := tmpFile.WriteString(s); err != nil {
+//		log.Debug(err)
+//		t.Error("Error while writing output file.")
+//		return
+//	}
+//
+//	// To guarantee the file to be written on disk before comparing
+//	if err := tmpFile.Sync(); err != nil {
+//		log.Debug(err)
+//		t.Error("File not written to disk")
+//		return
+//	}
+//
+//	// Reset reader offset since the file was already read once
+//	if _, err := file.Seek(0, 0); err != nil {
+//		log.Debug(err)
+//		t.Error("Error while resetting reader offset")
+//		return
+//	}
+//
+//	// Reset reader offset since the file was already read once
+//	if _, err := tmpFile.Seek(0, 0); err != nil {
+//		log.Debug(err)
+//		t.Error("Error while setting reader offset")
+//		return
+//	}
+//
+//	if !ChecksumMatch(t, file, tmpFile) {
+//		t.Error("checksum does not match")
+//		return
+//	}
+//}
 
 func TestReadNStringMaxSizePlugOne(t *testing.T) {
 	// Open input file for testing

@@ -6,19 +6,18 @@ import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
 			log.Error("Existing directory not deleted, perhaps it does not exist?")
 		}
-	})
+	}()
 	testFileN := "../testdata/checksum.txt"
 	_, privPem, err := OpenKeys("../testdata/keypair1/")
 	if err != nil {
@@ -33,7 +32,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	tmpFile, err := ioutil.TempFile(".", "test")
+	tmpFile, err := os.Create("testTmp")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error opening temp file")
@@ -65,13 +64,6 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Error("Error in Encrypt")
 		return
 	}
-	defer func() {
-		if err := streamEncrypt.Close(); err != nil {
-			log.Debug(err)
-			t.Error("Error in Close")
-			return
-		}
-	}()
 
 	// Reset offset
 	if _, err := tmpFile.Seek(0, 0); err != nil {
@@ -87,31 +79,25 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Error("Error in DecryptSetup")
 		return
 	}
+
 	err = streamDecrypt.Decrypt(tmpFile, &privKey.PublicKey, privKey)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Decrypt")
 		return
 	}
-	defer func() {
-		if err := streamDecrypt.Close(); err != nil {
-			log.Debug(err)
-			t.Error("Error in Close")
-			return
-		}
-	}()
 }
 
 func TestEncryptDecrypt2(t *testing.T) {
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
 			log.Error("Existing directory not deleted, perhaps it does not exist?")
 		}
-	})
+	}()
 	testFileN := "../testdata/cat.jpg"
 
-	tmpFile, err := ioutil.TempFile(".", "test")
+	tmpFile, err := os.Create("testTmp")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error opening temp file")
@@ -165,19 +151,13 @@ func TestEncryptDecrypt2(t *testing.T) {
 		t.Error("Error in EncryptSetup")
 		return
 	}
+
 	err = streamEncrypt.Encrypt(tmpFile, &privKey2.PublicKey, privKey1)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Encrypt")
 		return
 	}
-	defer func() {
-		if err := streamEncrypt.Close(); err != nil {
-			log.Debug(err)
-			t.Error("Error in Close")
-			return
-		}
-	}()
 
 	// Reset offset
 	if _, err := tmpFile.Seek(0, 0); err != nil {
@@ -199,13 +179,6 @@ func TestEncryptDecrypt2(t *testing.T) {
 		t.Error("Error in Decrypt")
 		return
 	}
-	defer func() {
-		if err := streamDecrypt.Close(); err != nil {
-			log.Debug(err)
-			t.Error("Error in Close")
-			return
-		}
-	}()
 
 	srcFile, err := os.Open(testFileN)
 	if err != nil {
