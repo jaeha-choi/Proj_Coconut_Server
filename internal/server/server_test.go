@@ -15,8 +15,8 @@ func init() {
 
 func TestInitConfig(t *testing.T) {
 	t.Cleanup(cleanUpHelper)
-	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
-	createCopy("../../data/cert/server.key", "./data/cert/server.key")
+	createCopy("../../testdata/testOnly.crt", "./data/cert/server.crt")
+	createCopy("../../testdata/testOnly.key", "./data/cert/server.key")
 
 	if err := os.MkdirAll("./config", os.ModePerm); err != nil {
 		log.Debug(err)
@@ -49,8 +49,8 @@ func TestInitConfig(t *testing.T) {
 
 func TestAddRemoveDevice(t *testing.T) {
 	t.Cleanup(cleanUpHelper)
-	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
-	createCopy("../../data/cert/server.key", "./data/cert/server.key")
+	createCopy("../../testdata/testOnly.crt", "./data/cert/server.crt")
+	createCopy("../../testdata/testOnly.key", "./data/cert/server.key")
 
 	if err := os.MkdirAll("./config", os.ModePerm); err != nil {
 		log.Debug(err)
@@ -102,8 +102,8 @@ func TestAddRemoveDevice(t *testing.T) {
 
 func BenchmarkAddRemoveDevice(b *testing.B) {
 	b.Cleanup(cleanUpHelper)
-	createCopy("../../data/cert/server.crt", "./data/cert/server.crt")
-	createCopy("../../data/cert/server.key", "./data/cert/server.key")
+	createCopy("../../testdata/testOnly.crt", "./data/cert/server.crt")
+	createCopy("../../testdata/testOnly.key", "./data/cert/server.key")
 
 	if err := os.MkdirAll("./config", os.ModePerm); err != nil {
 		log.Debug(err)
