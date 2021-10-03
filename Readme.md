@@ -12,7 +12,7 @@ An open-source, cross-platform solution to share files between devices.
 TODO: Update URL once the executable file is uploaded
 
 1. Change working directory to desired installation directory
-    - `cd /desired/path/`
+   - `cd /foo/bar/`
 2. Download the executable file
     - Using curl: `curl -OJ *url*`
     - Using wget: `wget *url*`
@@ -23,11 +23,11 @@ TODO: Update URL once the executable file is uploaded
 5. Generate an RSA key
     - `openssl genrsa -out server.key 4096`
 6. To generate a self-signed certificate for a testing purpose, using the following command:
-    - `openssl req -new -x509 -sha256 -key server.key -out server.crt`
-7. Change the working directory to main directory
-    - `cd ../..`
+   - `openssl req -new -x509 -sha256 -key server.key -out server.crt`
+7. Change the working directory back to main installation directory
+   - `cd /foo/bar/`
 8. Start the server
-    - `./coconut_server *optional_arguments*`
+   - `./coconut_server *optional_arguments*`
 
 ## Build
 
