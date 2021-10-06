@@ -13,6 +13,10 @@ const (
 	RemoveAddCode Command = "RADC"
 	GetPubKey     Command = "GPUB"
 	RequestPubKey Command = "RPUB"
+	GetPTPip      Command = "GPTP" // get peer to peer ip address
+	RequestPTPip  Command = "RPTP" // request peer to peer ip address
+	//GetPTPInit    Command = "PTPI" // get peer to peer init packet (does not have request
+	// because packets will be thrown away)
 )
 
 func (c Command) String() string {
