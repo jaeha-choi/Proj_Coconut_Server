@@ -20,7 +20,7 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error         { return e.Err }
 func (e *Error) GetCode() (code uint8) { return e.ErrCode }
 
-var ErrorCodes = [255]*Error{
+var ErrorCodes = [256]*Error{
 	nil, // Error code 0 means no error
 	UnknownCodeError,
 	UnknownCommandError,
