@@ -14,7 +14,9 @@ const (
 	GetPubKey     Command = "GPUB"
 	RequestPubKey Command = "RPUB"
 	GetPTPKey     Command = "GKEY" // get public key for client you want to connect
-	RequestPTPip  Command = "RPTP" // request peer to peer ip address
+	RequestPTP    Command = "RPTP" // request peer to peer ip address
+	GetLocalIP    Command = "LCIP" // handle receiving of local ip for p2p connection
+	GetPublicIP   Command = "PBIP" // handle receiving public ip address
 )
 
 func (c Command) String() string {
