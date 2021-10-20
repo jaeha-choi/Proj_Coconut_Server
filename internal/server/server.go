@@ -32,6 +32,9 @@ type client struct {
 	isBeingUsedMutex *sync.Mutex
 	addCodeIdx       int
 	connToClient     net.Conn
+	localIPNet       net.IPNet
+	publicIPNet      net.IPNet
+	pubKeyHash       string
 	// May add Pub/Priv IP/Port for hole punching
 }
 
@@ -309,6 +312,8 @@ func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
 	}
 	//pubKeyHashStr := string(pubKeyHash)
 	pubKeyHashStr := string(util.BytesToBase64(pubKeyHash))
+	// add get local ip
+	// add public ip
 	serv.addDevice(pubKeyHashStr, conn)
 
 	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
@@ -493,6 +498,8 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			err = serv.handleRequestRelay(conn)
 		case common.RequestPubKey.String():
 			err = serv.handleRequestPubKey(conn)
+		case common.RequestPTP.String():
+			err = serv.handleInitP2P(conn)
 		case common.Quit.String():
 			isQuit = true
 		default:
@@ -540,5 +547,41 @@ func (serv *Server) Start() (err error) {
 			}
 		}()
 	}
+	return err
+}
+
+func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
+	log.Info("p2p request from:", conn.LocalAddr())
+	if _, err = util.WriteString(conn, common.GetPTPKey.String()); err != nil {
+		return err
+	}
+	pubkeyHash, err := util.ReadString(conn)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while connecting to the server")
+		return err
+	}
+	c, b := serv.devices.Load(pubkeyHash)
+
+	return err
+}
+
+func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP net.IP, err error) {
+	clientLocalIP, err := util.ReadString(conn)
+	if err != nil {
+		log.Error("Error receiving local IP address")
+		return nil, err
+	}
+	localIP = net.ParseIP(clientLocalIP)
+	return localIP, err
+}
+
+func (serv *Server) handleServeLocalIP(peer net.Conn) (err error) {
+
+	return err
+}
+
+func (serv *Server) handlePubKeyHash() (err error) {
+
 	return err
 }
