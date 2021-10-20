@@ -32,8 +32,8 @@ type client struct {
 	isBeingUsedMutex *sync.Mutex
 	addCodeIdx       int
 	connToClient     net.Conn
-	localIPNet       net.IPNet
-	publicIPNet      net.IPNet
+	localAddr        net.Addr
+	publicAddr       net.Addr
 	pubKeyHash       string
 	// May add Pub/Priv IP/Port for hole punching
 }
@@ -226,8 +226,9 @@ func (serv *Server) addDevice(pubKeyHash string, conn net.Conn) {
 		isBeingUsedMutex: &sync.Mutex{},
 		addCodeIdx:       -1,
 		connToClient:     conn,
+		localAddr:        nil,
+		publicAddr:       conn.RemoteAddr(),
 	}
-
 	// Add device public key hash to online devices
 	serv.devices.Store(pubKeyHash, newClient)
 }
@@ -312,8 +313,7 @@ func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
 	}
 	//pubKeyHashStr := string(pubKeyHash)
 	pubKeyHashStr := string(util.BytesToBase64(pubKeyHash))
-	// add get local ip
-	// add public ip
+
 	serv.addDevice(pubKeyHashStr, conn)
 
 	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
@@ -551,37 +551,53 @@ func (serv *Server) Start() (err error) {
 }
 
 func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
-	log.Info("p2p request from:", conn.LocalAddr())
+	log.Info("P2P request from: ", conn.RemoteAddr())
 	if _, err = util.WriteString(conn, common.GetPTPKey.String()); err != nil {
 		return err
 	}
-	pubkeyHash, err := util.ReadString(conn)
+	pubkeyHash, err := util.ReadBytes(conn)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while connecting to the server")
 		return err
 	}
-	c, b := serv.devices.Load(pubkeyHash)
 
+	// get peer to connect to
+	c, ok := serv.devices.Load(string(pubkeyHash))
+	if !ok || c == nil {
+		_, err = util.WriteString(conn, common.ClientNotFoundError.Error())
+		return common.ClientNotFoundError
+	}
+	cli := c.(*client)
+
+	cli.localAddr, err = serv.handleGetLocalIP(conn)
+	// send local ip of peer
+	_, err = util.WriteString(conn, cli.localAddr.String())
+	if err != nil {
+		log.Error("Error writing to client")
+		return err
+	}
+
+	// send public ip of peer
+	_, err = util.WriteString(conn, cli.publicAddr.String())
+	if err != nil {
+		log.Error("Error writing to client")
+		return err
+	}
 	return err
 }
 
-func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP net.IP, err error) {
+func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP net.Addr, err error) {
+	_, err = util.WriteString(conn, common.GetLocalIP.String())
+	if err != nil {
+		return nil, err
+	}
 	clientLocalIP, err := util.ReadString(conn)
 	if err != nil {
 		log.Error("Error receiving local IP address")
 		return nil, err
 	}
-	localIP = net.ParseIP(clientLocalIP)
+	log.Debug(clientLocalIP)
+	localIP, _ = net.ResolveIPAddr("ip", clientLocalIP)
 	return localIP, err
-}
-
-func (serv *Server) handleServeLocalIP(peer net.Conn) (err error) {
-
-	return err
-}
-
-func (serv *Server) handlePubKeyHash() (err error) {
-
-	return err
 }
