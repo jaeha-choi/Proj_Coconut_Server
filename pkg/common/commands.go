@@ -17,6 +17,8 @@ const (
 	RequestPTP    Command = "RPTP" // request peer to peer ip address
 	GetLocalIP    Command = "LCIP" // handle receiving of local ip for p2p connection
 	GetPublicIP   Command = "PBIP" // handle receiving public ip address
+	HolePunchPING Command = "PING" // init command for p2p connection
+	HolePunchPONG Command = "PONG" // init reply to "PING" command
 )
 
 func (c Command) String() string {
