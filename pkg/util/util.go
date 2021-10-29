@@ -16,10 +16,17 @@ import (
 )
 
 const (
+	HeaderSize   = 6
 	BufferSize   = 4096
 	Uint32Max    = 4294967295
 	DownloadPath = "./downloaded"
 )
+
+type Message struct {
+	data        []byte
+	ErrorCode   uint8
+	CommandCode uint8
+}
 
 var EmptyFileName = errors.New("empty filename")
 
@@ -30,143 +37,46 @@ var bufPool = sync.Pool{
 	},
 }
 
-// ReadString reads string from a connection
-func ReadString(reader io.Reader) (str string, err error) {
-	bytes, err := ReadBytes(reader)
-	return string(bytes), err
-}
-
-func ReadBytes(reader io.Reader) (b []byte, err error) {
-	b, errCode, err := ReadBytesErr(reader)
-	if err != nil {
-		return b, err
-	}
-	// Next four lines CANNOT be replaced with "return b, errCode"
-	// This is because errCode nil and nil are different types.
-	if errCode != nil {
-		return b, errCode
-	}
-	return b, nil
-}
-
-// ReadBytesErr reads b from reader.
-// Returns error, if any.
-func ReadBytesErr(reader io.Reader) (b []byte, errorCode *common.Error, err error) {
+// ReadMessage reads message from reader.
+func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	// Read packet size
 	size, err := readSize(reader)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading packet size")
-		return nil, nil, err
+		return nil, err
 	}
-
-	//// ReadBytes always expect the size to be <= BufferSize
-	//if size > BufferSize {
-	//	log.Error("Size cannot be greater than ", BufferSize, ". Received size: ", size)
-	//	return nil, SizeError
-	//}
 
 	// Read Error Code
-	readError, err := readErrorCode(reader)
+	header, err := readNBytes(reader, 2)
 	if err != nil {
 		log.Debug(err)
-		log.Error("Error while reading error code")
-		return nil, nil, err
+		log.Error("Error while reading error code and command code")
+		return nil, err
 	}
 
-	// Read bytes from reader
-	if b, err = readNBytes(reader, size); err != nil {
+	// Create new Message
+	msg = &Message{
+		data:        nil,
+		ErrorCode:   header[0],
+		CommandCode: header[1],
+	}
+
+	// Read data
+	msg.data, err = readNBytes(reader, size)
+
+	// If error was raised by readNBytes, just return what we have with an error
+	if err != nil {
 		log.Debug(err)
 		log.Error("Error raised by readNBytes")
-		return nil, readError, err
 	}
-	return b, readError, nil
+	return msg, err
 }
 
-// ReadBytesToWriter reads message from reader and write it to writer.
-// First four bytes of reader should be uint32 size of the message,
-// represented in big endian.
-// Common usage for this function is to read from net.Conn, and write to temp file.
-func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
-	// Read message size
-	size, err := readSize(reader)
-	if err != nil {
-		log.Debug(err)
-		return 0, err
-	}
-
-	if writeWithSize {
-		err := writeSize(writer, size)
-		if err != nil {
-			log.Debug(err)
-			return 0, err
-		}
-	}
-
-	if err = writeErrorCode(writer, nil); err != nil {
-		return 0, err
-	}
-
-	totalReceived, err := readWrite(reader, writer, size)
-	if err != nil {
-		return totalReceived, err
-	}
-	return totalReceived, err
-}
-
-// ReadBinary reads file name and file content from a connection and save it.
-func ReadBinary(reader io.Reader) (errorCode *common.Error, err error) {
-	// Read file name
-	fileN, err := ReadString(reader)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading file name")
-		return nil, err
-	}
-	if fileN == "" {
-		log.Error("File name cannot be empty")
-		return nil, EmptyFileName
-	}
-
-	// Read file size
-	size, err := readSize(reader)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading file size")
-		return nil, err
-	}
-
-	errCode, err := readErrorCode(reader)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while getting status code")
-		return errCode, err
-	}
-
-	// Read file and save
-	if err := readNBinary(reader, size, fileN); err != nil {
-		log.Debug(err)
-		log.Error("Error while reading/saving binary file")
-		return errCode, err
-	}
-	return errCode, nil
-}
-
-// WriteString writes msg to writer
-// length of msg cannot exceed BufferSize
-// Returns total bytes sent and error, if any.
-// err == nil only if length of sent bytes = length of msg
-func WriteString(writer io.Writer, msg string) (int, error) {
-	return WriteBytes(writer, []byte(msg))
-}
-
-func WriteBytes(writer io.Writer, b []byte) (int, error) {
-	return WriteBytesErr(writer, b, nil)
-}
-
-// WriteBytesErr write b to writer.
+// WriteMessage write msg to writer. commandToWrite should not be nil
 // Returns int indicating the number of bytes written, and error, if any.
-func WriteBytesErr(writer io.Writer, b []byte, errorToWrite *common.Error) (n int, err error) {
+// err == nil only if length of sent bytes = length of msg
+func WriteMessage(writer io.Writer, b []byte, errorToWrite *common.Error, commandToWrite *common.Command) (n int, err error) {
 	//// Return error if b is too big
 	//if len(b) > BufferSize {
 	//	log.Error("Byte should contain less than ", BufferSize)
@@ -180,98 +90,28 @@ func WriteBytesErr(writer io.Writer, b []byte, errorToWrite *common.Error) (n in
 		return 0, err
 	}
 
-	// Get error code
-	var code uint8 = 0
+	// Get error errCode
+	var errCode uint8 = 0
 	if errorToWrite != nil {
-		code = errorToWrite.ErrCode
+		errCode = errorToWrite.ErrCode
 	}
 
-	// Write size (first 4 bytes) and error code (last 1 byte)
-	if _, err = writer.Write(append(Uint32ToByte(size), code)); err != nil {
-		log.Debug(err)
-		log.Error("Error while writing packet size")
-		return 0, err
-	}
+	// Create header
+	// First 4 bytes: size
+	// 5th byte: error code
+	// 6th byte: command
+	header := createHeader(size)
+	header[4] = errCode
+	header[5] = commandToWrite.Code
 
 	// Write b to writer
-	writtenSize, err := writer.Write(b)
+	writtenSize, err := writer.Write(append(header, b...))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while writing bytes")
 		return writtenSize, err
 	}
 	return writtenSize, err
-}
-
-// WriteBinary opens file and writes byte data to writer.
-// Returns total length of bytes sent, and error. err == nil only if
-// total bytes sent = file size.
-// writer is likely to be net.Conn. File size cannot exceed max value of uint32
-// as of now. We can split files or change the data type to uint64 if time allows.
-func WriteBinary(writer io.Writer, filePath string) (int, error) {
-	// Open source file to send
-	srcFile, err := os.Open(filePath)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while opening source file")
-		return 0, err
-	}
-	// Close src file when done
-	defer func() {
-		if err := srcFile.Close(); err != nil {
-			log.Debug(err)
-			log.Error("Error while closing file")
-		}
-	}()
-
-	// Get stat of the file
-	srcFileStat, err := srcFile.Stat()
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while fetching stats for source file")
-		return 0, err
-	}
-
-	// If file is too big to send, return error.
-	srcFileSize, err := Int64ToUint32(srcFileStat.Size())
-	if err != nil {
-		log.Debug(err)
-		log.Error("File exceeds size limit")
-		return 0, err
-	}
-
-	// Only preserve file name instead of passing directory + file name
-	_, fileN := filepath.Split(filePath)
-
-	// Send file name
-	if _, err := WriteString(writer, fileN); err != nil {
-		log.Debug(err)
-		log.Error("Error while sending file name")
-		return 0, err
-	}
-
-	// Write size of the file size to writer
-	if err := writeSize(writer, srcFileSize); err != nil {
-		log.Debug(err)
-		log.Error("Error while writing string size")
-		return 0, err
-	}
-
-	// Write ErrorCode
-	if err := writeErrorCode(writer, nil); err != nil {
-		log.Debug(err)
-		log.Error("Error while writing error code")
-		return 0, err
-	}
-
-	// Write file to writer
-	writtenSize, err := readWrite(srcFile, writer, srcFileSize)
-	if err != nil || writtenSize != int(srcFileSize) {
-		log.Debug(err)
-		log.Error("Error while writing binary file")
-		return writtenSize, err
-	}
-	return writtenSize, nil
 }
 
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value
@@ -286,27 +126,16 @@ func readSize(reader io.Reader) (uint32, error) {
 	return binary.BigEndian.Uint32(b), nil
 }
 
-func readErrorCode(reader io.Reader) (readError *common.Error, err error) {
-	// Read 1 byte for the error code
-	b, err := readNBytes(reader, 1)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading packet size")
-		return nil, err
-	}
-	if b[0] != 0 {
-		readError = common.ErrorCodes[b[0]]
-		if readError == nil {
-			return common.UnknownCodeError, nil
-		}
-		return readError, nil
-	}
-	return nil, nil
-}
-
 // Uint32ToByte converts uint32 value to byte slices
 func Uint32ToByte(size uint32) []byte {
 	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, size)
+	return b
+}
+
+// createHeader creates header and write size
+func createHeader(size uint32) []byte {
+	b := make([]byte, HeaderSize)
 	binary.BigEndian.PutUint32(b, size)
 	return b
 }
@@ -349,69 +178,6 @@ func writeErrorCode(writer io.Writer, errorToWrite *common.Error) (err error) {
 	return nil
 }
 
-// readNBinary reads up to nth bytes and save it as fileN in DownloadPath.
-// Maximum buffer size does not exceed BufferSize.
-// Returns error == nil only if file is fully downloaded, renamed and moved to DownloadPath.
-func readNBinary(reader io.Reader, n uint32, fileN string) error {
-	var isDownloadComplete = false
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(DownloadPath, os.ModePerm); err != nil {
-		log.Debug(err)
-		log.Error("Error while creating download directory")
-		return err
-	}
-
-	// Create temporary file for downloading
-	tmpFile, err := ioutil.TempFile(DownloadPath, ".tmp_download_")
-	if err != nil {
-		log.Debug(err)
-		log.Error("Temp file could not be opened")
-		return err
-	}
-
-	// If error encountered while writing a file, close then delete tmp file.
-	defer func(name string) {
-		if !isDownloadComplete {
-			if err := tmpFile.Close(); err != nil {
-				log.Debug(err)
-				log.Error("Error while closing the file.")
-			}
-			// Delete file if not renamed
-			if err := os.Remove(name); err != nil {
-				log.Debug(err)
-				log.Error("Error while removing temp file. Temp file at: ", name)
-			}
-		}
-	}(tmpFile.Name())
-
-	if writtenSize, err := readWrite(reader, tmpFile, n); writtenSize != int(n) || err != nil {
-		log.Debug(err)
-		log.Error("Error while reading from reader and writing to temp file")
-		return err
-	}
-	isDownloadComplete = true
-
-	// Close I/O operation for temporary file
-	if err := tmpFile.Close(); err != nil {
-		log.Debug(err)
-		log.Error("Error while closing temp file.")
-		return err
-	}
-
-	// Move temporary file to download directory (DownloadPath)
-	if err := os.Rename(tmpFile.Name(), filepath.Join(DownloadPath, fileN)); err != nil {
-		log.Debug(err)
-		log.Error("Error moving the temp file to download path")
-		if err := os.Remove(tmpFile.Name()); err != nil {
-			log.Debug(err)
-			log.Error("Error while removing temp file. Temp file at: ", tmpFile.Name())
-		}
-		return err
-	}
-	return nil
-}
-
 // readNString reads up to nth character. Maximum length should not exceed BufferSize.
 func readNString(reader io.Reader, n uint32) (string, error) {
 	if n > BufferSize {
@@ -436,34 +202,6 @@ func readNBytes(reader io.Reader, n uint32) ([]byte, error) {
 func readNBytesPointer(reader io.Reader, buffer *[]byte) error {
 	_, err := io.ReadFull(reader, *buffer)
 	return err
-}
-
-// readWrite is a helper function to read exactly size bytes from reader and write it to writer.
-// Returns length of bytes written and error, if any. Error = nil only if length of bytes
-// written = size.
-func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
-	totalReceived := 0
-	intSize := int(size)
-	readSize := BufferSize
-	buffer := bufPool.Get().([]byte)
-	for totalReceived < intSize {
-		if totalReceived+BufferSize > intSize {
-			readSize = intSize - totalReceived
-		}
-		read, err := io.ReadFull(reader, buffer[:readSize])
-		if err != nil || read != readSize {
-			log.Debug(err)
-			return totalReceived, err
-		}
-		written, err := writer.Write(buffer[:readSize])
-		totalReceived += written
-		if err != nil {
-			log.Debug(err)
-			return totalReceived, err
-		}
-	}
-	bufPool.Put(buffer)
-	return totalReceived, nil
 }
 
 // Int64ToUint32 converts int64 value to uint32.
@@ -528,4 +266,371 @@ func BytesToBase64(data []byte) []byte {
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(encoded, data[:])
 	return encoded
+}
+
+// Deprecated: readNBinary reads up to nth bytes and save it as fileN in DownloadPath.
+// Maximum buffer size does not exceed BufferSize.
+// Returns error == nil only if file is fully downloaded, renamed and moved to DownloadPath.
+//goland:noinspection GoDeprecation
+func readNBinary(reader io.Reader, n uint32, fileN string) error {
+	var isDownloadComplete = false
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(DownloadPath, os.ModePerm); err != nil {
+		log.Debug(err)
+		log.Error("Error while creating download directory")
+		return err
+	}
+
+	// Create temporary file for downloading
+	tmpFile, err := ioutil.TempFile(DownloadPath, ".tmp_download_")
+	if err != nil {
+		log.Debug(err)
+		log.Error("Temp file could not be opened")
+		return err
+	}
+
+	// If error encountered while writing a file, close then delete tmp file.
+	defer func(name string) {
+		if !isDownloadComplete {
+			if err := tmpFile.Close(); err != nil {
+				log.Debug(err)
+				log.Error("Error while closing the file.")
+			}
+			// Delete file if not renamed
+			if err := os.Remove(name); err != nil {
+				log.Debug(err)
+				log.Error("Error while removing temp file. Temp file at: ", name)
+			}
+		}
+	}(tmpFile.Name())
+
+	if writtenSize, err := readWrite(reader, tmpFile, n); writtenSize != int(n) || err != nil {
+		log.Debug(err)
+		log.Error("Error while reading from reader and writing to temp file")
+		return err
+	}
+	isDownloadComplete = true
+
+	// Close I/O operation for temporary file
+	if err := tmpFile.Close(); err != nil {
+		log.Debug(err)
+		log.Error("Error while closing temp file.")
+		return err
+	}
+
+	// Move temporary file to download directory (DownloadPath)
+	if err := os.Rename(tmpFile.Name(), filepath.Join(DownloadPath, fileN)); err != nil {
+		log.Debug(err)
+		log.Error("Error moving the temp file to download path")
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			log.Debug(err)
+			log.Error("Error while removing temp file. Temp file at: ", tmpFile.Name())
+		}
+		return err
+	}
+	return nil
+}
+
+// Deprecated: readErrorCode
+//goland:noinspection GoDeprecation
+func readErrorCode(reader io.Reader) (readError *common.Error, err error) {
+	// Read 1 byte for the error code
+	b, err := readNBytes(reader, 1)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading packet size")
+		return nil, err
+	}
+	if b[0] != 0 {
+		readError = common.ErrorCodes[b[0]]
+		if readError == nil {
+			return common.UnknownCodeError, nil
+		}
+		return readError, nil
+	}
+	return nil, nil
+}
+
+// Deprecated: readWrite is a helper function to read exactly size bytes from reader and write it to writer.
+// Returns length of bytes written and error, if any. Error = nil only if length of bytes
+// written = size.
+//goland:noinspection GoDeprecation
+func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
+	totalReceived := 0
+	intSize := int(size)
+	readSize := BufferSize
+	buffer := bufPool.Get().([]byte)
+	for totalReceived < intSize {
+		if totalReceived+BufferSize > intSize {
+			readSize = intSize - totalReceived
+		}
+		read, err := io.ReadFull(reader, buffer[:readSize])
+		if err != nil || read != readSize {
+			log.Debug(err)
+			return totalReceived, err
+		}
+		written, err := writer.Write(buffer[:readSize])
+		totalReceived += written
+		if err != nil {
+			log.Debug(err)
+			return totalReceived, err
+		}
+	}
+	bufPool.Put(buffer)
+	return totalReceived, nil
+}
+
+// Deprecated: ReadBytesToWriter reads message from reader and write it to writer.
+// First four bytes of reader should be uint32 size of the message,
+// represented in big endian.
+// Common usage for this function is to read from net.Conn, and write to temp file.
+//goland:noinspection GoDeprecation
+func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
+	// Read message size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		return 0, err
+	}
+
+	if writeWithSize {
+		err := writeSize(writer, size)
+		if err != nil {
+			log.Debug(err)
+			return 0, err
+		}
+	}
+
+	if err = writeErrorCode(writer, nil); err != nil {
+		return 0, err
+	}
+
+	totalReceived, err := readWrite(reader, writer, size)
+	if err != nil {
+		return totalReceived, err
+	}
+	return totalReceived, err
+}
+
+// Deprecated: ReadString reads string from reader
+//goland:noinspection GoDeprecation
+func ReadString(reader io.Reader) (str string, err error) {
+	bytes, err := ReadBytes(reader)
+	return string(bytes), err
+}
+
+// Deprecated: ReadBytes reads bytes from reader
+//goland:noinspection GoDeprecation
+func ReadBytes(reader io.Reader) (b []byte, err error) {
+	b, errCode, err := ReadBytesErr(reader)
+	if err != nil {
+		return b, err
+	}
+	// Next four lines CANNOT be replaced with "return b, errCode"
+	// This is because errCode nil and nil are different types.
+	if errCode != nil {
+		return b, errCode
+	}
+	return b, nil
+}
+
+// Deprecated: ReadBytesErr reads b from reader.
+//goland:noinspection GoDeprecation
+func ReadBytesErr(reader io.Reader) (b []byte, errorCode *common.Error, err error) {
+	// Read packet size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading packet size")
+		return nil, nil, err
+	}
+
+	//// ReadBytes always expect the size to be <= BufferSize
+	//if size > BufferSize {
+	//	log.Error("Size cannot be greater than ", BufferSize, ". Received size: ", size)
+	//	return nil, SizeError
+	//}
+
+	// Read Error Code
+	readError, err := readErrorCode(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading error code")
+		return nil, nil, err
+	}
+
+	// Read bytes from reader
+	if b, err = readNBytes(reader, size); err != nil {
+		log.Debug(err)
+		log.Error("Error raised by readNBytes")
+		return nil, readError, err
+	}
+	return b, readError, nil
+}
+
+// Deprecated: ReadBinary reads file name and file content from a connection and save it.
+//goland:noinspection GoDeprecation
+func ReadBinary(reader io.Reader) (errorCode *common.Error, err error) {
+	// Read file name
+	fileN, err := ReadString(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading file name")
+		return nil, err
+	}
+	if fileN == "" {
+		log.Error("File name cannot be empty")
+		return nil, EmptyFileName
+	}
+
+	// Read file size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading file size")
+		return nil, err
+	}
+
+	errCode, err := readErrorCode(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while getting status code")
+		return errCode, err
+	}
+
+	// Read file and save
+	if err := readNBinary(reader, size, fileN); err != nil {
+		log.Debug(err)
+		log.Error("Error while reading/saving binary file")
+		return errCode, err
+	}
+	return errCode, nil
+}
+
+// Deprecated: WriteString writes msg to writer
+// length of msg cannot exceed BufferSize
+// Returns total bytes sent and error, if any.
+// err == nil only if length of sent bytes = length of msg
+//goland:noinspection GoDeprecation
+func WriteString(writer io.Writer, msg string) (int, error) {
+	return WriteBytes(writer, []byte(msg))
+}
+
+// Deprecated: WriteBytes
+//goland:noinspection GoDeprecation
+func WriteBytes(writer io.Writer, b []byte) (int, error) {
+	return WriteBytesErr(writer, b, nil)
+}
+
+// Deprecated: WriteBytesErr write b to writer.
+// Returns int indicating the number of bytes written, and error, if any.
+//goland:noinspection GoDeprecation
+func WriteBytesErr(writer io.Writer, b []byte, errorToWrite *common.Error) (n int, err error) {
+	//// Return error if b is too big
+	//if len(b) > BufferSize {
+	//	log.Error("Byte should contain less than ", BufferSize)
+	//	return 0, SizeError
+	//}
+
+	// Check b len
+	size, err := IntToUint32(len(b))
+	if err != nil {
+		log.Debug(err)
+		return 0, err
+	}
+
+	// Get error code
+	var code uint8 = 0
+	if errorToWrite != nil {
+		code = errorToWrite.ErrCode
+	}
+
+	// Write size (first 4 bytes) and error code (last 1 byte)
+	if _, err = writer.Write(append(Uint32ToByte(size), code)); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing packet size")
+		return 0, err
+	}
+
+	// Write b to writer
+	writtenSize, err := writer.Write(b)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while writing bytes")
+		return writtenSize, err
+	}
+	return writtenSize, err
+}
+
+// Deprecated: WriteBinary opens file and writes byte data to writer.
+// Returns total length of bytes sent, and error. err == nil only if
+// total bytes sent = file size.
+// writer is likely to be net.Conn. File size cannot exceed max value of uint32
+// as of now. We can split files or change the data type to uint64 if time allows.
+//goland:noinspection GoDeprecation
+func WriteBinary(writer io.Writer, filePath string) (int, error) {
+	// Open source file to send
+	srcFile, err := os.Open(filePath)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while opening source file")
+		return 0, err
+	}
+	// Close src file when done
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			log.Debug(err)
+			log.Error("Error while closing file")
+		}
+	}()
+
+	// Get stat of the file
+	srcFileStat, err := srcFile.Stat()
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while fetching stats for source file")
+		return 0, err
+	}
+
+	// If file is too big to send, return error.
+	srcFileSize, err := Int64ToUint32(srcFileStat.Size())
+	if err != nil {
+		log.Debug(err)
+		log.Error("File exceeds size limit")
+		return 0, err
+	}
+
+	// Only preserve file name instead of passing directory + file name
+	_, fileN := filepath.Split(filePath)
+
+	// Send file name
+	if _, err := WriteString(writer, fileN); err != nil {
+		log.Debug(err)
+		log.Error("Error while sending file name")
+		return 0, err
+	}
+
+	// Write size of the file size to writer
+	if err := writeSize(writer, srcFileSize); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing string size")
+		return 0, err
+	}
+
+	// Write ErrorCode
+	if err := writeErrorCode(writer, nil); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing error code")
+		return 0, err
+	}
+
+	// Write file to writer
+	writtenSize, err := readWrite(srcFile, writer, srcFileSize)
+	if err != nil || writtenSize != int(srcFileSize) {
+		log.Debug(err)
+		log.Error("Error while writing binary file")
+		return writtenSize, err
+	}
+	return writtenSize, nil
 }

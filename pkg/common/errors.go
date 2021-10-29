@@ -32,6 +32,7 @@ var ErrorCodes = [256]*Error{
 	ReceiverNotAvailable,
 	NoAvailableAddCodeError,
 	ExistingConnError,
+	PeerUnavailableError,
 }
 
 var UnknownCodeError = &Error{
@@ -82,4 +83,9 @@ var NoAvailableAddCodeError = &Error{
 var ExistingConnError = &Error{
 	Err:     errors.New("existing connection present in client struct"),
 	ErrCode: 10,
+}
+
+var PeerUnavailableError = &Error{
+	Err:     errors.New("able to establish connection with peer"),
+	ErrCode: 11,
 }
