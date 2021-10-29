@@ -32,8 +32,8 @@ type client struct {
 	isBeingUsedMutex *sync.Mutex
 	addCodeIdx       int
 	connToClient     net.Conn
-	localAddr        net.Addr
-	publicAddr       net.Addr
+	localAddr        string
+	publicAddr       string
 	pubKeyHash       string
 	// May add Pub/Priv IP/Port for hole punching
 }
@@ -220,14 +220,14 @@ func (serv *Server) removeAddCode(addCode int, pubKeyHash string) (err error) {
 	return nil
 }
 
-func (serv *Server) addDevice(pubKeyHash string, conn net.Conn) {
+func (serv *Server) addDevice(pubKeyHash string, lAddr string, conn net.Conn) {
 	newClient := &client{
 		isBeingUsed:      false,
 		isBeingUsedMutex: &sync.Mutex{},
 		addCodeIdx:       -1,
 		connToClient:     conn,
-		localAddr:        nil,
-		publicAddr:       conn.RemoteAddr(),
+		localAddr:        lAddr,
+		publicAddr:       conn.RemoteAddr().String(),
 	}
 	// Add device public key hash to online devices
 	serv.devices.Store(pubKeyHash, newClient)
@@ -307,14 +307,19 @@ func (serv *Server) getAddCode(pubKeyHash string) (addCode int, err error) {
 }
 
 func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
-	pubKeyHash, err := util.ReadBytes(conn)
+	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return "", err
 	}
 	//pubKeyHashStr := string(pubKeyHash)
-	pubKeyHashStr := string(util.BytesToBase64(pubKeyHash))
+	pubKeyHashStr := string(util.BytesToBase64(msg.Data))
 
-	serv.addDevice(pubKeyHashStr, conn)
+	msg, err = util.ReadMessage(conn)
+	if err != nil {
+		return "", err
+	}
+
+	serv.addDevice(pubKeyHashStr, string(msg.Data), conn)
 
 	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
 
@@ -327,11 +332,12 @@ func (serv *Server) handleQuit(pubKeyHash string) {
 }
 
 func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err error) {
+	var command = common.GetAddCode
 	addCode, err := serv.getAddCode(pubKeyHash)
 	if err != nil {
 		return err
 	}
-	_, err = util.WriteString(conn, fmt.Sprintf("%06d", addCode))
+	_, err = util.WriteMessage(conn, []byte(fmt.Sprintf("%06d", addCode)), nil, command)
 	if err != nil {
 		return err
 	}
@@ -342,11 +348,12 @@ func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err erro
 }
 
 func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	addCodeStr, err := util.ReadString(conn)
+	// Get Add Code
+	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
-	addCode, err := strconv.Atoi(addCodeStr)
+	addCode, err := strconv.Atoi(string(msg.Data))
 	if err != nil {
 		return err
 	}
@@ -361,11 +368,11 @@ func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err e
 
 // TODO: Work in progress
 func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
-	rxPubKeyHash, err := util.ReadString(conn)
+	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
-	c, ok := serv.devices.Load(rxPubKeyHash)
+	c, ok := serv.devices.Load(string(msg.Data))
 	if !ok || c == nil {
 		log.Debug(common.ClientNotFoundError)
 		return common.ClientNotFoundError
@@ -374,7 +381,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 	receiver := c.(*client)
 
 	var endNow string
-	for endNow == common.EndRelay.String() {
+	for endNow == common.EndRelay.String {
 		// TODO: Send command/Result to rx?
 		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
 		if err != nil {
@@ -396,11 +403,12 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 }
 
 func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
-	rxAddCodeStr, err := util.ReadString(conn)
+	var command = common.GetPubKey
+	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
-	rxAddCode, err := strconv.Atoi(rxAddCodeStr)
+	rxAddCode, err := strconv.Atoi(string(msg.Data))
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
 	serv.addCodeArrMutex.RLock()
 	rxPubKeyH := serv.addCodeArr[addCodeIdx][1].(string)
@@ -412,14 +420,14 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
-	if _, err = util.WriteString(cli.connToClient, common.GetPubKey.String()); err != nil {
+	if _, err = util.WriteMessage(cli.connToClient, nil, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending command to rx client")
 		return err
 	}
 
 	defer func() {
-		_ = writeResult(cli.connToClient, err)
+		_ = writeResult(cli.connToClient, err, command)
 	}()
 
 	if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
@@ -431,7 +439,7 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 	return nil
 }
 
-func writeResult(conn net.Conn, errorToWrite error) (err error) {
+func writeResult(conn net.Conn, errorToWrite error, command *common.Command) (err error) {
 	var e *common.Error
 	if errorToWrite != nil {
 		log.Debug(errorToWrite)
@@ -444,7 +452,7 @@ func writeResult(conn net.Conn, errorToWrite error) (err error) {
 	} else {
 		e = nil
 	}
-	if _, err = util.WriteBytesErr(conn, nil, e); err != nil {
+	if _, err = util.WriteMessage(conn, nil, e, command); err != nil {
 		log.Debug(err)
 		return err
 	}
@@ -465,7 +473,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	// If initialization fails, attempt to write the error code
 	// to the client, then close the connection
 	pubKeyHash, err := serv.handleInit(conn)
-	if _ = writeResult(conn, err); err != nil {
+	if _ = writeResult(conn, err, common.Init); err != nil {
 		log.Debug(err)
 		log.Error("Error while initializing client")
 		return err
@@ -483,30 +491,30 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 
 	isQuit := false
 	for !isQuit {
-		c, _, e := util.ReadBytesErr(conn)
+		m, e := util.ReadMessage(conn)
 		if e != nil {
 			return e
 		}
-		command := string(c)
-		log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Command//" + command)
+		command := common.CommandCodes[m.CommandCode]
+		log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Command//" + command.String)
 		switch command {
-		case common.GetAddCode.String():
+		case common.GetAddCode:
 			err = serv.handleGetAddCode(conn, pubKeyHash)
-		case common.RemoveAddCode.String():
+		case common.RemoveAddCode:
 			err = serv.handleRemoveAddCode(conn, pubKeyHash)
-		case common.RequestRelay.String():
+		case common.RequestRelay:
 			err = serv.handleRequestRelay(conn)
-		case common.RequestPubKey.String():
+		case common.RequestPubKey:
 			err = serv.handleRequestPubKey(conn)
-		case common.RequestPTP.String():
-			err = serv.handleInitP2P(conn)
-		case common.Quit.String():
+		//case common.RequestPTP.String:
+		//	err = serv.handleInitP2P(conn)
+		case common.Quit:
 			isQuit = true
 		default:
 			log.Debug(common.UnknownCommandError)
 			return common.UnknownCommandError
 		}
-		if err = writeResult(conn, err); err != nil {
+		if err = writeResult(conn, err, command); err != nil {
 			return err
 		}
 	}
@@ -550,54 +558,53 @@ func (serv *Server) Start() (err error) {
 	return err
 }
 
-func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
-	log.Info("P2P request from: ", conn.RemoteAddr())
-	if _, err = util.WriteString(conn, common.GetPTPKey.String()); err != nil {
-		return err
-	}
-	pubkeyHash, err := util.ReadBytes(conn)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while connecting to the server")
-		return err
-	}
-
-	// get peer to connect to
-	c, ok := serv.devices.Load(string(pubkeyHash))
-	if !ok || c == nil {
-		_, err = util.WriteString(conn, common.ClientNotFoundError.Error())
-		return common.ClientNotFoundError
-	}
-	cli := c.(*client)
-
-	cli.localAddr, err = serv.handleGetLocalIP(conn)
-	// send local ip of peer
-	_, err = util.WriteString(conn, cli.localAddr.String())
-	if err != nil {
-		log.Error("Error writing to client")
-		return err
-	}
-
-	// send public ip of peer
-	_, err = util.WriteString(conn, cli.publicAddr.String())
-	if err != nil {
-		log.Error("Error writing to client")
-		return err
-	}
-	return err
-}
-
-func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP net.Addr, err error) {
-	_, err = util.WriteString(conn, common.GetLocalIP.String())
-	if err != nil {
-		return nil, err
-	}
-	clientLocalIP, err := util.ReadString(conn)
-	if err != nil {
-		log.Error("Error receiving local IP address")
-		return nil, err
-	}
-	log.Debug(clientLocalIP)
-	localIP, _ = net.ResolveIPAddr("ip", clientLocalIP)
-	return localIP, err
-}
+//func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
+//	log.Info("P2P request from: ", conn.RemoteAddr())
+//	if _, err = util.WriteString(conn, common.GetPTPKey.String()); err != nil {
+//		return err
+//	}
+//	pubkeyHash, err := util.ReadBytes(conn)
+//	if err != nil {
+//		log.Debug(err)
+//		log.Error("Error while connecting to the server")
+//		return err
+//	}
+//
+//	// get peer to connect to
+//	c, ok := serv.devices.Load(string(pubkeyHash))
+//	if !ok || c == nil {
+//		return common.ClientNotFoundError
+//	}
+//	cli := c.(*client)
+//
+//	cli.localAddr, err = serv.handleGetLocalIP(conn)
+//	// send local ip of peer
+//	_, err = util.WriteString(conn, cli.localAddr.String())
+//	if err != nil {
+//		log.Error("Error writing to client")
+//		return err
+//	}
+//
+//	// send public ip of peer
+//	_, err = util.WriteString(conn, cli.publicAddr.String())
+//	if err != nil {
+//		log.Error("Error writing to client")
+//		return err
+//	}
+//	return err
+//}
+//
+//func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP net.Addr, err error) {
+//	_, err = util.WriteString(conn, common.GetLocalIP.String())
+//	if err != nil {
+//		return nil, err
+//	}
+//	clientLocalIP, err := util.ReadString(conn)
+//	if err != nil {
+//		log.Error("Error receiving local IP address")
+//		return nil, err
+//	}
+//	log.Debug(clientLocalIP)
+//	localIP, _ = net.ResolveIPAddr("ip", clientLocalIP)
+//	return localIP, err
+//}
