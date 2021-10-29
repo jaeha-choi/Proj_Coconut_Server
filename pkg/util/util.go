@@ -268,6 +268,65 @@ func BytesToBase64(data []byte) []byte {
 	return encoded
 }
 
+// ReadBytesToWriter reads message from reader and write it to writer.
+// First four bytes of reader should be uint32 size of the message,
+// represented in big endian.
+// Common usage for this function is to read from net.Conn, and write to temp file.
+func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
+	// Read message size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		return 0, err
+	}
+
+	if writeWithSize {
+		err := writeSize(writer, size)
+		if err != nil {
+			log.Debug(err)
+			return 0, err
+		}
+	}
+
+	if err = writeErrorCode(writer, nil); err != nil {
+		return 0, err
+	}
+
+	totalReceived, err := readWrite(reader, writer, size)
+	if err != nil {
+		return totalReceived, err
+	}
+	return totalReceived, err
+}
+
+// readWrite is a helper function to read exactly size bytes from reader and write it to writer.
+// Returns length of bytes written and error, if any. Error = nil only if length of bytes
+// written = size.
+func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
+	totalReceived := 0
+	intSize := int(size)
+	readSize := BufferSize
+	buffer := bufPool.Get().([]byte)
+	for totalReceived < intSize {
+		if totalReceived+BufferSize > intSize {
+			readSize = intSize - totalReceived
+		}
+		read, err := io.ReadFull(reader, buffer[:readSize])
+		if err != nil || read != readSize {
+			log.Debug(err)
+			return totalReceived, err
+		}
+		written, err := writer.Write(buffer[:readSize])
+		totalReceived += written
+		if err != nil {
+			log.Debug(err)
+			return totalReceived, err
+		}
+	}
+	bufPool.Put(buffer)
+	return totalReceived, nil
+}
+
 // Deprecated: readNBinary reads up to nth bytes and save it as fileN in DownloadPath.
 // Maximum buffer size does not exceed BufferSize.
 // Returns error == nil only if file is fully downloaded, renamed and moved to DownloadPath.
@@ -350,67 +409,6 @@ func readErrorCode(reader io.Reader) (readError *common.Error, err error) {
 		return readError, nil
 	}
 	return nil, nil
-}
-
-// Deprecated: readWrite is a helper function to read exactly size bytes from reader and write it to writer.
-// Returns length of bytes written and error, if any. Error = nil only if length of bytes
-// written = size.
-//goland:noinspection GoDeprecation
-func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
-	totalReceived := 0
-	intSize := int(size)
-	readSize := BufferSize
-	buffer := bufPool.Get().([]byte)
-	for totalReceived < intSize {
-		if totalReceived+BufferSize > intSize {
-			readSize = intSize - totalReceived
-		}
-		read, err := io.ReadFull(reader, buffer[:readSize])
-		if err != nil || read != readSize {
-			log.Debug(err)
-			return totalReceived, err
-		}
-		written, err := writer.Write(buffer[:readSize])
-		totalReceived += written
-		if err != nil {
-			log.Debug(err)
-			return totalReceived, err
-		}
-	}
-	bufPool.Put(buffer)
-	return totalReceived, nil
-}
-
-// Deprecated: ReadBytesToWriter reads message from reader and write it to writer.
-// First four bytes of reader should be uint32 size of the message,
-// represented in big endian.
-// Common usage for this function is to read from net.Conn, and write to temp file.
-//goland:noinspection GoDeprecation
-func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
-	// Read message size
-	size, err := readSize(reader)
-	if err != nil {
-		log.Debug(err)
-		return 0, err
-	}
-
-	if writeWithSize {
-		err := writeSize(writer, size)
-		if err != nil {
-			log.Debug(err)
-			return 0, err
-		}
-	}
-
-	if err = writeErrorCode(writer, nil); err != nil {
-		return 0, err
-	}
-
-	totalReceived, err := readWrite(reader, writer, size)
-	if err != nil {
-		return totalReceived, err
-	}
-	return totalReceived, err
 }
 
 // Deprecated: ReadString reads string from reader
