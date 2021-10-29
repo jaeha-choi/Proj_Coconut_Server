@@ -23,7 +23,7 @@ const (
 )
 
 type Message struct {
-	data        []byte
+	Data        []byte
 	ErrorCode   uint8
 	CommandCode uint8
 }
@@ -57,13 +57,13 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 
 	// Create new Message
 	msg = &Message{
-		data:        nil,
+		Data:        nil,
 		ErrorCode:   header[0],
 		CommandCode: header[1],
 	}
 
 	// Read data
-	msg.data, err = readNBytes(reader, size)
+	msg.Data, err = readNBytes(reader, size)
 
 	// If error was raised by readNBytes, just return what we have with an error
 	if err != nil {
