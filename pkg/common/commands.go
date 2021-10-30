@@ -15,13 +15,14 @@ var CommandCodes = [256]*Command{
 	EndRelay,
 	RequestRelay,
 	GetP2PKey,
-	RequestPTP,
+	RequestP2P,
 	HolePunchPING,
 	HolePunchPONG,
+	File,
 }
 
 var Init = &Command{
-	String: "Init",
+	String: "INIT",
 	Code:   0,
 }
 var Quit = &Command{
@@ -59,8 +60,8 @@ var GetP2PKey = &Command{
 	Code:   8,
 }
 
-// RequestPTP request peer to peer ip address
-var RequestPTP = &Command{
+// RequestP2P request peer to peer ip address
+var RequestP2P = &Command{
 	String: "RPTP",
 	Code:   9,
 }
@@ -75,4 +76,10 @@ var HolePunchPING = &Command{
 var HolePunchPONG = &Command{
 	String: "PONG",
 	Code:   11,
+}
+
+// File command is used when exchanging encrypted files
+var File = &Command{
+	String: "FILE",
+	Code:   12,
 }

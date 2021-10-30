@@ -42,16 +42,12 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	// Read packet size
 	size, err := readSize(reader)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading packet size")
 		return nil, err
 	}
 
 	// Read Error Code
 	header, err := readNBytes(reader, 2)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading error code and command code")
 		return nil, err
 	}
 
@@ -64,12 +60,6 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 
 	// Read data
 	msg.Data, err = readNBytes(reader, size)
-
-	// If error was raised by readNBytes, just return what we have with an error
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error raised by readNBytes")
-	}
 	return msg, err
 }
 
@@ -86,7 +76,6 @@ func WriteMessage(writer io.Writer, b []byte, errorToWrite *common.Error, comman
 	// Check b len
 	size, err := IntToUint32(len(b))
 	if err != nil {
-		log.Debug(err)
 		return 0, err
 	}
 
@@ -107,8 +96,6 @@ func WriteMessage(writer io.Writer, b []byte, errorToWrite *common.Error, comman
 	// Write b to writer
 	writtenSize, err := writer.Write(append(header, b...))
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while writing bytes")
 		return writtenSize, err
 	}
 	return writtenSize, err
@@ -119,8 +106,6 @@ func readSize(reader io.Reader) (uint32, error) {
 	// Read first 4 bytes for the size
 	b, err := readNBytes(reader, 4)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while reading packet size")
 		return 0, err
 	}
 	return binary.BigEndian.Uint32(b), nil
@@ -157,8 +142,6 @@ func ByteToUint16(b []byte) uint16 {
 func writeSize(writer io.Writer, size uint32) (err error) {
 	// consider using array over slice for a better performance i.e: arr := [4]byte{}
 	if _, err = writer.Write(Uint32ToByte(size)); err != nil {
-		log.Debug(err)
-		log.Error("Error while writing packet size")
 		return err
 	}
 	return nil
@@ -171,8 +154,6 @@ func writeErrorCode(writer io.Writer, errorToWrite *common.Error) (err error) {
 	}
 	// Write 1 byte of error code
 	if _, err = writer.Write([]byte{code}); err != nil {
-		log.Debug(err)
-		log.Error("Error while reading packet size")
 		return err
 	}
 	return nil
@@ -233,8 +214,6 @@ func CheckIPAddress(ip string) bool {
 func WriteConfig(fileName string, config interface{}) (err error) {
 	dstFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while creating file for config")
 		return err
 	}
 	defer func() {
@@ -247,14 +226,10 @@ func WriteConfig(fileName string, config interface{}) (err error) {
 
 	marshal, err := yaml.Marshal(&config)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while converting serv struct to []byte")
 		return err
 	}
 
 	if _, err := dstFile.Write(marshal); err != nil {
-		log.Debug(err)
-		log.Error("Error while writing config file")
 		return err
 	}
 
@@ -276,7 +251,6 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 	// Read message size
 	size, err := readSize(reader)
 	if err != nil {
-		log.Debug(err)
 		return 0, err
 	}
 
@@ -292,7 +266,7 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 		return 0, err
 	}
 
-	totalReceived, err := readWrite(reader, writer, size)
+	totalReceived, err := readWrite(reader, writer, size+2)
 	if err != nil {
 		return totalReceived, err
 	}
@@ -313,13 +287,11 @@ func readWrite(reader io.Reader, writer io.Writer, size uint32) (int, error) {
 		}
 		read, err := io.ReadFull(reader, buffer[:readSize])
 		if err != nil || read != readSize {
-			log.Debug(err)
 			return totalReceived, err
 		}
 		written, err := writer.Write(buffer[:readSize])
 		totalReceived += written
 		if err != nil {
-			log.Debug(err)
 			return totalReceived, err
 		}
 	}

@@ -25,6 +25,7 @@ var ErrorCodes = [256]*Error{
 	UnknownCodeError,
 	UnknownCommandError,
 	GeneralServerError,
+	GeneralClientError,
 	TaskNotCompleteError,
 	PubKeyMismatchError,
 	ClientNotFoundError,
@@ -50,42 +51,47 @@ var GeneralServerError = &Error{
 	ErrCode: 3,
 }
 
+var GeneralClientError = &Error{
+	Err:     errors.New("general server error"),
+	ErrCode: 4,
+}
+
 var TaskNotCompleteError = &Error{
 	Err:     errors.New("task not complete"),
-	ErrCode: 4,
+	ErrCode: 5,
 }
 
 var PubKeyMismatchError = &Error{
 	Err:     errors.New("public key mismatch"),
-	ErrCode: 5,
+	ErrCode: 6,
 }
 
 var ClientNotFoundError = &Error{
 	Err:     errors.New("client not found error"),
-	ErrCode: 6,
+	ErrCode: 7,
 }
 
 var ReceiverNotFound = &Error{
 	Err:     errors.New("receiver was not found"),
-	ErrCode: 7,
+	ErrCode: 8,
 }
 
 var ReceiverNotAvailable = &Error{
 	Err:     errors.New("receiver is not available"),
-	ErrCode: 8,
+	ErrCode: 9,
 }
 
 var NoAvailableAddCodeError = &Error{
 	Err:     errors.New("no available add code error"),
-	ErrCode: 9,
+	ErrCode: 10,
 }
 
 var ExistingConnError = &Error{
 	Err:     errors.New("existing connection present in client struct"),
-	ErrCode: 10,
+	ErrCode: 11,
 }
 
 var PeerUnavailableError = &Error{
 	Err:     errors.New("able to establish connection with peer"),
-	ErrCode: 11,
+	ErrCode: 12,
 }
