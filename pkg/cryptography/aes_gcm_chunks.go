@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"io"
@@ -123,7 +124,10 @@ func DecryptSetup() (ag *AesGcmChunk, err error) {
 // Receiver's public key is required for encrypting symmetric encryption key.
 // Sender's private key is required for signing the encrypted key.
 // err == nil indicates successful execution.
+// TODO: Send error if previous operation was unsuccessful
 func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (err error) {
+	var command = common.File
+
 	keyChNum := append(ag.key, util.Uint16ToByte(ag.chunkCount)...)
 	// Encrypt and sign symmetric encryption key
 	dataEncrypted, dataSignature, err := EncryptSignMsg(keyChNum, receiverPubKey, senderPrivKey)
@@ -134,14 +138,14 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 	}
 
 	// Send encrypted symmetric key
-	if _, err = util.WriteBytes(writer, dataEncrypted); err != nil {
+	if _, err = util.WriteMessage(writer, dataEncrypted, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error in WriteBytes while sending dataEncrypted")
 		return err
 	}
 
 	// Send encrypted symmetric key signature
-	if _, err = util.WriteBytes(writer, dataSignature); err != nil {
+	if _, err = util.WriteMessage(writer, dataSignature, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error in WriteBytes while sending dataSignature")
 		return err
@@ -155,13 +159,13 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 		return err
 	}
 	// Send IV (Nonce)
-	if _, err = util.WriteBytes(writer, fileNameIv); err != nil {
+	if _, err = util.WriteMessage(writer, fileNameIv, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error in WriteBytes while writing fileNameIv")
 		return err
 	}
 	// Send encrypted file name
-	if _, err = util.WriteBytes(writer, encryptedFileName); err != nil {
+	if _, err = util.WriteMessage(writer, encryptedFileName, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error in WriteBytes while writing encrypted file name")
 		return err
@@ -185,13 +189,13 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 			return err
 		}
 		// Send IV in plain text
-		if _, err = util.WriteBytes(writer, iv); err != nil {
+		if _, err = util.WriteMessage(writer, iv, nil, command); err != nil {
 			log.Debug(err)
 			log.Error("Error in WriteBytes while sending iv")
 			return err
 		}
 		// Send encrypted file chunk + current chunk number (first two bytes)
-		if _, err = util.WriteBytes(writer, encryptedFileChunk); err != nil {
+		if _, err = util.WriteMessage(writer, encryptedFileChunk, nil, command); err != nil {
 			log.Debug(err)
 			log.Error("Error in WriteBytes while sending encryptedFileChunk")
 			return err
@@ -272,23 +276,23 @@ func (ag *AesGcmChunk) encryptBytes(plain []byte) (encryptedData []byte, iv []by
 // Sender's public key is required for verifying signature.
 // Receiver's private key is required for decrypting symmetric encryption key.
 // err == nil indicates successful execution.
-func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (err error) {
+func (ag *AesGcmChunk) Decrypt(chanMap chan *util.Message, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (err error) {
 	// Reads encrypted symmetric encryption key
-	dataEncrypted, err := util.ReadBytes(reader)
-	if err != nil {
+	dataEncrypted := <-chanMap
+	if dataEncrypted.ErrorCode != 0 {
 		log.Debug(err)
 		log.Error("Error in ReadBytes while getting dataEncrypted")
-		return err
+		return common.ErrorCodes[dataEncrypted.ErrorCode]
 	}
 	// Reads signature for encrypted symmetric encryption key
-	dataSignature, err := util.ReadBytes(reader)
-	if err != nil {
+	dataSignature := <-chanMap
+	if dataSignature.ErrorCode != 0 {
 		log.Debug(err)
 		log.Error("Error in ReadBytes while getting dataEncrypted")
-		return err
+		return common.ErrorCodes[dataSignature.ErrorCode]
 	}
 	// Verify and decrypts symmetric encryption key
-	dataPlain, err := DecryptVerifyMsg(dataEncrypted, dataSignature, senderPubKey, receiverPrivKey)
+	dataPlain, err := DecryptVerifyMsg(dataEncrypted.Data, dataSignature.Data, senderPubKey, receiverPrivKey)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error in DecryptVerifyMsg")
@@ -300,23 +304,23 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 	ag.chunkCount = util.ByteToUint16(dataPlain[SymKeySize:])
 
 	// Get IV for decrypting file name
-	ivFileName, err := util.ReadBytes(reader)
-	if err != nil {
+	ivFileName := <-chanMap
+	if ivFileName.ErrorCode != 0 {
 		log.Debug(err)
 		log.Error("Error while reading iv for file name")
-		return err
+		return common.ErrorCodes[ivFileName.ErrorCode]
 	}
 
 	// Get encrypted file name
-	encryptedFileName, err := util.ReadBytes(reader)
-	if err != nil {
+	encryptedFileName := <-chanMap
+	if encryptedFileName.ErrorCode != 0 {
 		log.Debug(err)
 		log.Error("Error while reading encrypted file name")
-		return err
+		return common.ErrorCodes[encryptedFileName.ErrorCode]
 	}
 
 	// Decrypt file name with encrypted data and IV
-	decryptedFileName, err := ag.decryptBytes(encryptedFileName, ivFileName)
+	decryptedFileName, err := ag.decryptBytes(encryptedFileName.Data, ivFileName.Data)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while decrypting file name")
@@ -327,24 +331,24 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 	ag.fileName = string(decryptedFileName)
 
 	// Receive file and decrypt
-	var encryptedFileChunk, iv []byte
+	var encryptedFileChunk, iv *util.Message
 	// Loop until every chunk is received
 	// ag.writeOffset and ag.writeChunkNum are updated in decryptChunk
 	for ag.writeChunkNum < ag.chunkCount {
 		// Read IV in plain text
-		if iv, err = util.ReadBytes(reader); err != nil {
+		if iv = <-chanMap; iv.ErrorCode != 0 {
 			log.Debug(err)
 			log.Error("Error in ReadBytes while reading iv")
-			return err
+			return common.ErrorCodes[iv.ErrorCode]
 		}
 		// Read encrypted file chunk + current chunk number (first two bytes)
-		if encryptedFileChunk, err = util.ReadBytes(reader); err != nil {
+		if encryptedFileChunk = <-chanMap; encryptedFileChunk.ErrorCode != 0 {
 			log.Debug(err)
 			log.Error("Error in ReadBytes while reading encryptedFileChunk")
-			return err
+			return common.ErrorCodes[encryptedFileChunk.ErrorCode]
 		}
 		// Decrypt file chunk + current chunk number (first two bytes)
-		decryptedFileChunk, _, err := ag.decryptChunk(encryptedFileChunk, iv)
+		decryptedFileChunk, _, err := ag.decryptChunk(encryptedFileChunk.Data, iv.Data)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error in decryptChunk")

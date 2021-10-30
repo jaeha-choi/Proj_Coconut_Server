@@ -80,7 +80,16 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	err = streamDecrypt.Decrypt(tmpFile, &privKey.PublicKey, privKey)
+	fileChan := make(chan *util.Message, 100)
+	for {
+		msg, err := util.ReadMessage(tmpFile)
+		if err == io.EOF {
+			break
+		}
+		fileChan <- msg
+	}
+
+	err = streamDecrypt.Decrypt(fileChan, &privKey.PublicKey, privKey)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Decrypt")
@@ -173,7 +182,17 @@ func TestEncryptDecrypt2(t *testing.T) {
 		t.Error("Error in DecryptSetup")
 		return
 	}
-	err = streamDecrypt.Decrypt(tmpFile, &privKey1.PublicKey, privKey2)
+
+	fileChan := make(chan *util.Message, 100)
+	for {
+		msg, err := util.ReadMessage(tmpFile)
+		if err == io.EOF {
+			break
+		}
+		fileChan <- msg
+	}
+
+	err = streamDecrypt.Decrypt(fileChan, &privKey1.PublicKey, privKey2)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Decrypt")
