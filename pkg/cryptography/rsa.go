@@ -31,9 +31,40 @@ func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 	return privKey, nil
 }
 
-// OpenKeys open existing keys and return them as *pem.Block.
+// OpenPubKey opens public key named keyFileN in keyPath
+func OpenPubKey(keyPath string, keyFileN string) (pubKey *rsa.PublicKey, err error) {
+	pubFileN := filepath.Join(keyPath, keyFileN)
+	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
+		// Read existing pubkey file
+		pubFileBytes, err := ioutil.ReadFile(pubFileN)
+		if err != nil {
+			log.Debug(err)
+			log.Error("Error while opening RSA pubkey in OpenKeysAsBlock")
+			return nil, err
+		}
+		// Decode file and create block
+		pubBlock, _ := pem.Decode(pubFileBytes)
+		if pubBlock == nil {
+			log.Error("Error while decoding pubkey file")
+			return nil, err
+		}
+
+		if pubKey, err = x509.ParsePKCS1PublicKey(pubBlock.Bytes); err != nil {
+			log.Debug(err)
+			log.Error("Error while converting PEM block to keys")
+			return nil, err
+		}
+		return pubKey, err
+	} else {
+		log.Debug(err)
+		log.Error("pub key does not exist: " + keyFileN)
+	}
+	return nil, err
+}
+
+// OpenKeysAsBlock open existing keys and return them as *pem.Block.
 // If keys are not found, new keys will be created.
-func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err error) {
+func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err error) {
 	pubFileN := filepath.Join(keyPath, "key.pub")
 	privFileN := filepath.Join(keyPath, "key.priv")
 
@@ -44,7 +75,7 @@ func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err er
 		pubFileBytes, err := ioutil.ReadFile(pubFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while opening RSA pubkey in OpenKeys")
+			log.Error("Error while opening RSA pubkey in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Decode file and create block
@@ -58,7 +89,7 @@ func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err er
 		privFileBytes, err := ioutil.ReadFile(privFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while opening RSA privfile in OpenKeys")
+			log.Error("Error while opening RSA privfile in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Decode file and create block
@@ -78,7 +109,7 @@ func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err er
 		key, err := createRSAKey(rsaKeyBitSize)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while creating RSA key in OpenKeys")
+			log.Error("Error while creating RSA key in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Open pubkey file
@@ -120,7 +151,7 @@ func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err er
 		privOut, err := os.OpenFile(privFileN, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while creating private key in OpenKeys")
+			log.Error("Error while creating private key in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Close privkey file when done

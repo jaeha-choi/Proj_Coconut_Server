@@ -262,10 +262,7 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 		}
 	}
 
-	if err = writeErrorCode(writer, nil); err != nil {
-		return 0, err
-	}
-
+	// size + 2 for full header
 	totalReceived, err := readWrite(reader, writer, size+2)
 	if err != nil {
 		return totalReceived, err

@@ -36,19 +36,19 @@ func TestCreateRSAKey(t *testing.T) {
 }
 
 func TestOpenKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
+	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 }
 
 func TestPemToKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
+	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 
@@ -60,10 +60,10 @@ func TestPemToKeys(t *testing.T) {
 }
 
 func TestPemToSha256(t *testing.T) {
-	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
+	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 	PemToSha256(pubPem)
@@ -87,10 +87,10 @@ func TestBytesToBase64(t *testing.T) {
 
 func TestKeyEncryptSignAESKey(t *testing.T) {
 	// Open Key as PEM
-	_, privPem, err := OpenKeys("../testdata/keypair1/")
+	_, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 
@@ -124,10 +124,10 @@ func TestKeyEncryptDecryptAESKey(t *testing.T) {
 
 	// Client 1
 	// Open Key as PEM
-	_, privPem1, err := OpenKeys("../testdata/keypair1/")
+	_, privPem1, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 
@@ -141,10 +141,10 @@ func TestKeyEncryptDecryptAESKey(t *testing.T) {
 
 	// Client 3
 	// Open Key as PEM
-	_, privPem3, err := OpenKeys("../testdata/keypair3/")
+	_, privPem3, err := OpenKeysAsBlock("../testdata/keypair3/")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 
