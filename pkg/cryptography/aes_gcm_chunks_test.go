@@ -19,10 +19,10 @@ func TestEncryptDecrypt(t *testing.T) {
 		}
 	}()
 	testFileN := "../testdata/checksum.txt"
-	_, privPem, err := OpenKeys("../testdata/keypair1/")
+	_, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 	privKey, err := PemToKeys(privPem)
@@ -80,7 +80,16 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	err = streamDecrypt.Decrypt(tmpFile, &privKey.PublicKey, privKey)
+	fileChan := make(chan *util.Message, 100)
+	for {
+		msg, err := util.ReadMessage(tmpFile)
+		if err == io.EOF {
+			break
+		}
+		fileChan <- msg
+	}
+
+	err = streamDecrypt.Decrypt(fileChan, &privKey.PublicKey, privKey)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Decrypt")
@@ -117,10 +126,10 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}()
 
 	// Client 1
-	_, privPem1, err := OpenKeys("../testdata/keypair1")
+	_, privPem1, err := OpenKeysAsBlock("../testdata/keypair1")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 	privKey1, err := PemToKeys(privPem1)
@@ -131,10 +140,10 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}
 
 	// Client 2
-	_, privPem2, err := OpenKeys("../testdata/keypair2")
+	_, privPem2, err := OpenKeysAsBlock("../testdata/keypair2")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeys")
+		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
 	privKey2, err := PemToKeys(privPem2)
@@ -173,7 +182,17 @@ func TestEncryptDecrypt2(t *testing.T) {
 		t.Error("Error in DecryptSetup")
 		return
 	}
-	err = streamDecrypt.Decrypt(tmpFile, &privKey1.PublicKey, privKey2)
+
+	fileChan := make(chan *util.Message, 100)
+	for {
+		msg, err := util.ReadMessage(tmpFile)
+		if err == io.EOF {
+			break
+		}
+		fileChan <- msg
+	}
+
+	err = streamDecrypt.Decrypt(fileChan, &privKey1.PublicKey, privKey2)
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in Decrypt")
