@@ -188,6 +188,13 @@ func TestKeyEncryptDecryptAESKey(t *testing.T) {
 
 }
 
+//
+//func TestOpenPubKey(t *testing.T) {
+//	key , _:= OpenPubKey("./", "key.pub")
+//	log.Debug(key.E)
+//	log.Debug(key.N.Bytes())
+//}
+
 // BytesToBase64 encodes raw bytes to base64
 func BytesToBase64(t *testing.T, data []byte) []byte {
 	t.Helper()

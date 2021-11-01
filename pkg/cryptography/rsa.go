@@ -35,17 +35,17 @@ func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 func OpenPubKey(keyPath string, keyFileN string) (pubKey *rsa.PublicKey, err error) {
 	pubFileN := filepath.Join(keyPath, keyFileN)
 	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
-		// Read existing pubkey file
+		// Read existing pubKey file
 		pubFileBytes, err := ioutil.ReadFile(pubFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while opening RSA pubkey in OpenKeysAsBlock")
+			log.Error("Error while opening RSA pubKey in OpenKeysAsBlock")
 			return nil, err
 		}
 		// Decode file and create block
 		pubBlock, _ := pem.Decode(pubFileBytes)
 		if pubBlock == nil {
-			log.Error("Error while decoding pubkey file")
+			log.Error("Error while decoding pubKey file")
 			return nil, err
 		}
 
@@ -71,25 +71,25 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 	// Check if keys already exist
 	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
 
-		// Read existing pubkey file
+		// Read existing pubKey file
 		pubFileBytes, err := ioutil.ReadFile(pubFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while opening RSA pubkey in OpenKeysAsBlock")
+			log.Error("Error while opening RSA pubKey in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Decode file and create block
 		pubBlock, _ = pem.Decode(pubFileBytes)
 		if pubBlock == nil {
-			log.Error("Error while decoding pubkey file")
+			log.Error("Error while decoding pubKey file")
 			return nil, nil, err
 		}
 
-		// Read existing privkey file
+		// Read existing privKey file
 		privFileBytes, err := ioutil.ReadFile(privFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while opening RSA privfile in OpenKeysAsBlock")
+			log.Error("Error while opening RSA private key file in OpenKeysAsBlock")
 			return nil, nil, err
 		}
 		// Decode file and create block
@@ -112,24 +112,24 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 			log.Error("Error while creating RSA key in OpenKeysAsBlock")
 			return nil, nil, err
 		}
-		// Open pubkey file
+		// Open pubKey file
 		pubOut, err := os.Create(pubFileN)
 		if err != nil {
 			log.Debug(err)
-			log.Error("Error while creating pubkey file")
+			log.Error("Error while creating pubKey file")
 			return nil, nil, err
 		}
-		// Close pubkey file when done
+		// Close pubKey file when done
 		defer func() {
 			if errDef := pubOut.Close(); errDef != nil {
 				log.Error(err)
-				log.Error("Error while closing pubkey file")
+				log.Error("Error while closing pubKey file")
 				err = errDef
 				return
 			}
 			if errDef := os.Chmod(pubFileN, 0644); errDef != nil {
 				log.Debug(errDef)
-				log.Error("Error while updating pubkey file permissions")
+				log.Error("Error while updating pubKey file permissions")
 				err = errDef
 				return
 			}
@@ -140,21 +140,21 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 			Headers: nil,
 			Bytes:   x509.MarshalPKCS1PublicKey(&key.PublicKey),
 		}
-		// Write PEM block to pubkey file
+		// Write PEM block to pubKey file
 		if err := pem.Encode(pubOut, pubBlock); err != nil {
 			log.Debug(err)
-			log.Error("Error while writing to pubkey file")
+			log.Error("Error while writing to pubKey file")
 			return nil, nil, err
 		}
 
-		// Create privkey file
+		// Create privKey file
 		privOut, err := os.OpenFile(privFileN, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating private key in OpenKeysAsBlock")
 			return nil, nil, err
 		}
-		// Close privkey file when done
+		// Close privKey file when done
 		defer func() {
 			if errDef := privOut.Close(); errDef != nil {
 				log.Debug(errDef)
@@ -175,7 +175,7 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 			Headers: nil,
 			Bytes:   x509.MarshalPKCS1PrivateKey(key),
 		}
-		// Write PEM block to privkey file
+		// Write PEM block to privKey file
 		if err := pem.Encode(privOut, privBlock); err != nil {
 			log.Debug(err)
 			log.Error("Error while encoding private key")
@@ -219,7 +219,7 @@ func BytesToPemFile(pemBytes []byte, fileName string) (err error) {
 	return nil
 }
 
-// EncryptSignMsg encrypts key for symmetric encryption with receiver's pubic key,
+// EncryptSignMsg encrypts key for symmetric encryption with receiver's public key,
 // and sign hashed symmetric encryption key with sender's private key.
 func EncryptSignMsg(msg []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (
 	encryptedData []byte, dataSignature []byte, err error) {

@@ -128,9 +128,8 @@ func DecryptSetup() (ag *AesGcmChunk, err error) {
 func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (err error) {
 	var command = common.File
 
-	keyChNum := append(ag.key, util.Uint16ToByte(ag.chunkCount)...)
 	// Encrypt and sign symmetric encryption key
-	dataEncrypted, dataSignature, err := EncryptSignMsg(keyChNum, receiverPubKey, senderPrivKey)
+	dataEncrypted, dataSignature, err := EncryptSignMsg(ag.key, receiverPubKey, senderPrivKey)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error in EncryptSignMsg")
@@ -151,8 +150,8 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 		return err
 	}
 
-	// Encrypt file name
-	encryptedFileName, fileNameIv, err := ag.encryptBytes([]byte(ag.fileName))
+	// Encrypt chunkCount + file name
+	encryptedFileName, fileNameIv, err := ag.encryptBytes(append(util.Uint16ToByte(ag.chunkCount), []byte(ag.fileName)...))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error in encryptBytes while encrypting file name")
@@ -292,16 +291,12 @@ func (ag *AesGcmChunk) Decrypt(chanMap chan *util.Message, senderPubKey *rsa.Pub
 		return common.ErrorCodes[dataSignature.ErrorCode]
 	}
 	// Verify and decrypts symmetric encryption key
-	dataPlain, err := DecryptVerifyMsg(dataEncrypted.Data, dataSignature.Data, senderPubKey, receiverPrivKey)
+	ag.key, err = DecryptVerifyMsg(dataEncrypted.Data, dataSignature.Data, senderPubKey, receiverPrivKey)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error in DecryptVerifyMsg")
 		return err
 	}
-
-	ag.key = dataPlain[:SymKeySize]
-	// Total chunk count is appended to symmetric encryption key
-	ag.chunkCount = util.ByteToUint16(dataPlain[SymKeySize:])
 
 	// Get IV for decrypting file name
 	ivFileName := <-chanMap
@@ -311,7 +306,7 @@ func (ag *AesGcmChunk) Decrypt(chanMap chan *util.Message, senderPubKey *rsa.Pub
 		return common.ErrorCodes[ivFileName.ErrorCode]
 	}
 
-	// Get encrypted file name
+	// Get encrypted chunkCount + file name
 	encryptedFileName := <-chanMap
 	if encryptedFileName.ErrorCode != 0 {
 		log.Debug(err)
@@ -319,7 +314,7 @@ func (ag *AesGcmChunk) Decrypt(chanMap chan *util.Message, senderPubKey *rsa.Pub
 		return common.ErrorCodes[encryptedFileName.ErrorCode]
 	}
 
-	// Decrypt file name with encrypted data and IV
+	// Decrypt chunkCount + file name with encrypted data and IV
 	decryptedFileName, err := ag.decryptBytes(encryptedFileName.Data, ivFileName.Data)
 	if err != nil {
 		log.Debug(err)
@@ -327,8 +322,11 @@ func (ag *AesGcmChunk) Decrypt(chanMap chan *util.Message, senderPubKey *rsa.Pub
 		return err
 	}
 
+	// Total chunk count is appended to file name
+	ag.chunkCount = util.ByteToUint16(decryptedFileName[:2])
+
 	// Update file name
-	ag.fileName = string(decryptedFileName)
+	ag.fileName = string(decryptedFileName[2:])
 
 	// Receive file and decrypt
 	var encryptedFileChunk, iv *util.Message
