@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
@@ -128,7 +129,7 @@ func (serv *Server) tlsConfig() (err error) {
 		ServerName: "127.0.0.1",
 		//ClientAuth:                  0,
 		//ClientCAs:                   nil,
-		//InsecureSkipVerify: false,
+		//InsecureSkIPVerify: false,
 		MinVersion: tls.VersionTLS13,
 		MaxVersion: tls.VersionTLS13,
 		//KeyLogWriter:                nil,
@@ -508,7 +509,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.RequestPubKey:
 			err = serv.handleRequestPubKey(conn)
 		case common.RequestP2P:
-			err = serv.handleInitP2P(conn)
+			err = serv.handleInitP2P(conn, pubKeyHash)
 		case common.Quit:
 			isQuit = true
 		default:
@@ -558,35 +559,68 @@ func (serv *Server) Start() (err error) {
 	return err
 }
 
-func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
-	log.Info("P2P request from: ", conn.RemoteAddr())
-	if err = writeResult(conn, nil, common.GetP2PKey); err != nil {
+// handleInitP2P
+/*
+	Order of operations for initiating client (tx):
+	Initiate p2p with common.RequestP2P command
+	Send PubKey hash of peer in which to connect to (rx)
+	Accept local IP of rx
+	Accept remote IP of rx
+*/
+
+func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
+	log.Info("P2P request from: ", txConn.RemoteAddr())
+	a, exists := serv.devices.Load(txHash)
+	if !exists {
+		return common.ClientNotFoundError
+	}
+	txClient := a.(*client)
+	if _, err = util.WriteMessage(txConn, nil, nil, common.GetP2PKey); err != nil {
 		return err
 	}
-	pubkeyHash, err := util.ReadMessage(conn)
+	txMsg, err := util.ReadMessage(txConn)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while connecting to the server")
 		return err
 	}
 
-	// get peer to connect to
-	c, ok := serv.devices.Load(pubkeyHash)
+	// get client structure of peer
+	c, ok := serv.devices.Load(txMsg.Data)
 	if !ok || c == nil {
+		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
 		return common.ClientNotFoundError
 	}
-	cli := c.(*client)
+	rxCli := c.(*client)
 
-	//cli.localAddr, err = serv.handleGetLocalIP(conn)
-	// send local ip of peer
-	_, err = util.WriteMessage(conn, []byte(cli.localAddr), nil, nil)
-	if err != nil {
-		log.Error("Error writing to client")
-		return err
+	// send requestptp command to receiver
+	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, common.RequestP2P)
+
+	// send tx pkhash to receiver
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, common.RequestP2P)
+
+	// read for RequestlocalIP from receiver
+	rxMsg, _ := util.ReadMessage(rxCli.connToClient)
+	if bytes.Compare(rxMsg.Data, []byte("LCIP")) != 0 {
+		return common.TaskNotCompleteError
+	}
+	// send tx localIP to receiver
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, common.RequestP2P)
+
+	// read for RequestpublicIP from receiver
+	rxMsg, _ = util.ReadMessage(rxCli.connToClient)
+	if bytes.Compare(rxMsg.Data, []byte("PBIP")) != 0 {
+		return common.TaskNotCompleteError
 	}
 
-	// send public ip of peer
-	_, err = util.WriteMessage(conn, []byte(cli.publicAddr), nil, nil)
+	// send tx publicIP to receiver
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, common.RequestP2P)
+
+	// send rx localIP to tx
+	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, common.RequestP2P)
+
+	// send rx publicIP to tx
+	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, common.RequestP2P)
 	if err != nil {
 		log.Error("Error writing to client")
 		return err
@@ -605,6 +639,6 @@ func (serv *Server) handleInitP2P(conn net.Conn) (err error) {
 //		return "", err
 //	}
 //	log.Debug(clientLocalIP)
-//	local, _ := net.ResolveIPAddr("ip", clientLocalIP)
+//	local, _ := net.ResolveIPAddr("IP", clientLocalIP)
 //	return local.String(), err
 //}
