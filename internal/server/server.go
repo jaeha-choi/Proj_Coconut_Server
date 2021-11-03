@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 )
 
 const (
@@ -569,7 +570,7 @@ func (serv *Server) Start() (err error) {
 
 func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	var command = common.RequestP2P
-	log.Info("P2P request from: ", txConn.RemoteAddr())
+	log.Info("Peer-to-Peer request from: ", txConn.RemoteAddr())
 	a, exists := serv.devices.Load(txHash)
 	if !exists {
 		return common.ClientNotFoundError
@@ -577,7 +578,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
-	log.Info("1")
 
 	txClient := a.(*client)
 	txMsg, err := util.ReadMessage(txConn)
@@ -586,7 +586,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		log.Error("Error while connecting to the server")
 		return err
 	}
-	log.Info("2")
 
 	// TODO create error for nil hash
 	if txMsg.Data == nil {
@@ -595,7 +594,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
-	log.Info("3")
 
 	// get client structure of peer
 	c, ok := serv.devices.Load(string(txMsg.Data))
@@ -603,7 +601,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
 		return common.ClientNotFoundError
 	}
-	log.Info("4")
 
 	rxCli := c.(*client)
 
@@ -611,29 +608,24 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, command); err != nil {
 		return err
 	}
-	log.Info("5")
-
+	time.Sleep(500 * time.Millisecond)
 	// send tx pkhash to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command); err != nil {
 		return err
 	}
-	log.Info("6")
 
 	// send tx localIP to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command); err != nil {
 		return err
 	}
-	log.Info("7")
 
 	// send tx publicIP to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command); err != nil {
 		return err
 	}
-	log.Info("8")
 
 	// send rx localIP to tx
 	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, command)
-	log.Info("9")
 
 	// send rx publicIP to tx
 	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, command)
@@ -641,7 +633,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		log.Error("Error writing to client")
 		return err
 	}
-	log.Info("10")
 
 	return err
 }
