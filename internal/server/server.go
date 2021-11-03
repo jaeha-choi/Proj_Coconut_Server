@@ -578,6 +578,7 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
+	log.Info("1")
 
 	txClient := a.(*client)
 	txMsg, err := util.ReadMessage(txConn)
@@ -586,6 +587,7 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		log.Error("Error while connecting to the server")
 		return err
 	}
+	log.Info("2")
 
 	// TODO create error for nil hash
 	if txMsg.Data == nil {
@@ -594,6 +596,7 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
+	log.Info("3")
 
 	// get client structure of peer
 	c, ok := serv.devices.Load(string(txMsg.Data))
