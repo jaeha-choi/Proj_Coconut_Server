@@ -587,7 +587,8 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		return common.GeneralServerError
 	}
 	// get client structure of peer
-	c, ok := serv.devices.Load(txMsg.Data)
+
+	c, ok := serv.devices.Load(string(txMsg.Data))
 	if !ok || c == nil {
 		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
 		return common.ClientNotFoundError
