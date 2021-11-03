@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
@@ -604,26 +603,23 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
 		return common.ClientNotFoundError
 	}
+	log.Info("4")
+
 	rxCli := c.(*client)
 
-	// send requestptp command to receiver
+	// send requestP2P command to receiver
 	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, command)
 
 	// send tx pkhash to receiver
 	_, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command)
-	// read for RequestlocalIP from receiver
-	rxMsg, _ := util.ReadMessage(rxCli.connToClient)
-	if bytes.Compare(rxMsg.Data, []byte("LCIP")) != 0 {
-		return common.TaskNotCompleteError
-	}
+	// read for RequestLocalIP from receiver
+	_, err = util.ReadMessage(rxCli.connToClient)
+
 	// send tx localIP to receiver
 	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command)
 
-	// read for RequestpublicIP from receiver
-	rxMsg, _ = util.ReadMessage(rxCli.connToClient)
-	if bytes.Compare(rxMsg.Data, []byte("PBIP")) != 0 {
-		return common.TaskNotCompleteError
-	}
+	// read for RequestPublicIP from receiver
+	_, err = util.ReadMessage(rxCli.connToClient)
 
 	// send tx publicIP to receiver
 	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command)
@@ -639,18 +635,3 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	}
 	return err
 }
-
-//func (serv *Server) handleGetLocalIP(conn net.Conn) (localIP string, err error) {
-//	err = writeResult(conn, nil, common.GetLocalIP)
-//	if err != nil {
-//		return "", err
-//	}
-//	clientLocalIP, err := util.ReadString(conn)
-//	if err != nil {
-//		log.Error("Error receiving local IP address")
-//		return "", err
-//	}
-//	log.Debug(clientLocalIP)
-//	local, _ := net.ResolveIPAddr("IP", clientLocalIP)
-//	return local.String(), err
-//}
