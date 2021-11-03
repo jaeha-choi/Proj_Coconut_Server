@@ -570,7 +570,7 @@ func (serv *Server) Start() (err error) {
 
 func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	var command = common.RequestP2P
-	log.Info("Peer-to-Peer request from: ", txConn.RemoteAddr())
+	log.Info("Client ", txHash[:debugClientNameLen], ": P2P Request ", txConn.RemoteAddr())
 	a, exists := serv.devices.Load(txHash)
 	if !exists {
 		return common.ClientNotFoundError
