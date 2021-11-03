@@ -611,24 +611,29 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, command); err != nil {
 		return err
 	}
+	log.Info("5")
 
 	// send tx pkhash to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command); err != nil {
 		return err
 	}
+	log.Info("6")
 
 	// send tx localIP to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command); err != nil {
 		return err
 	}
+	log.Info("7")
 
 	// send tx publicIP to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command); err != nil {
 		return err
 	}
+	log.Info("8")
 
 	// send rx localIP to tx
 	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, command)
+	log.Info("9")
 
 	// send rx publicIP to tx
 	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, command)
@@ -636,5 +641,7 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		log.Error("Error writing to client")
 		return err
 	}
+	log.Info("10")
+
 	return err
 }
