@@ -575,9 +575,6 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		return common.ClientNotFoundError
 	}
 	txClient := a.(*client)
-	if _, err = util.WriteMessage(txConn, nil, nil, common.GetP2PKey); err != nil {
-		return err
-	}
 	txMsg, err := util.ReadMessage(txConn)
 	if err != nil {
 		log.Debug(err)
@@ -585,6 +582,10 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		return err
 	}
 
+	// TODO create error for nil hash
+	if txMsg.Data == nil {
+		return common.GeneralServerError
+	}
 	// get client structure of peer
 	c, ok := serv.devices.Load(txMsg.Data)
 	if !ok || c == nil {
