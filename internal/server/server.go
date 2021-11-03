@@ -569,11 +569,16 @@ func (serv *Server) Start() (err error) {
 */
 
 func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
+	var command = common.RequestP2P
 	log.Info("P2P request from: ", txConn.RemoteAddr())
 	a, exists := serv.devices.Load(txHash)
 	if !exists {
 		return common.ClientNotFoundError
 	}
+	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
+		return err
+	}
+
 	txClient := a.(*client)
 	txMsg, err := util.ReadMessage(txConn)
 	if err != nil {
@@ -586,6 +591,9 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if txMsg.Data == nil {
 		return common.GeneralServerError
 	}
+	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
+		return err
+	}
 
 	// get client structure of peer
 	c, ok := serv.devices.Load(string(txMsg.Data))
@@ -594,21 +602,19 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 		return common.ClientNotFoundError
 	}
 	rxCli := c.(*client)
-	log.Debug("client found: ", rxCli.pubKeyHash, rxCli.localAddr, rxCli.publicAddr)
+
 	// send requestptp command to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, common.RequestP2P)
+	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, command)
 
 	// send tx pkhash to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, common.RequestP2P)
-
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command)
 	// read for RequestlocalIP from receiver
 	rxMsg, _ := util.ReadMessage(rxCli.connToClient)
-	log.Debug(string(rxMsg.Data))
 	if bytes.Compare(rxMsg.Data, []byte("LCIP")) != 0 {
 		return common.TaskNotCompleteError
 	}
 	// send tx localIP to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, common.RequestP2P)
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command)
 
 	// read for RequestpublicIP from receiver
 	rxMsg, _ = util.ReadMessage(rxCli.connToClient)
@@ -617,13 +623,13 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	}
 
 	// send tx publicIP to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, common.RequestP2P)
+	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command)
 
 	// send rx localIP to tx
-	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, common.RequestP2P)
+	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, command)
 
 	// send rx publicIP to tx
-	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, common.RequestP2P)
+	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, command)
 	if err != nil {
 		log.Error("Error writing to client")
 		return err
