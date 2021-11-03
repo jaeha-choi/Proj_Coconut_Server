@@ -586,15 +586,15 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	if txMsg.Data == nil {
 		return common.GeneralServerError
 	}
-	// get client structure of peer
 
+	// get client structure of peer
 	c, ok := serv.devices.Load(string(txMsg.Data))
 	if !ok || c == nil {
 		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
 		return common.ClientNotFoundError
 	}
 	rxCli := c.(*client)
-
+	log.Debug("client found: ", rxCli.pubKeyHash, rxCli.localAddr, rxCli.publicAddr)
 	// send requestptp command to receiver
 	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, common.RequestP2P)
 
@@ -603,6 +603,7 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 
 	// read for RequestlocalIP from receiver
 	rxMsg, _ := util.ReadMessage(rxCli.connToClient)
+	log.Debug(string(rxMsg.Data))
 	if bytes.Compare(rxMsg.Data, []byte("LCIP")) != 0 {
 		return common.TaskNotCompleteError
 	}
