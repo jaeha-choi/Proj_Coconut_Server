@@ -608,21 +608,24 @@ func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
 	rxCli := c.(*client)
 
 	// send requestP2P command to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, nil, nil, command)
+	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, command); err != nil {
+		return err
+	}
 
 	// send tx pkhash to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command)
-	// read for RequestLocalIP from receiver
-	_, err = util.ReadMessage(rxCli.connToClient)
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command); err != nil {
+		return err
+	}
 
 	// send tx localIP to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command)
-
-	// read for RequestPublicIP from receiver
-	_, err = util.ReadMessage(rxCli.connToClient)
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, command); err != nil {
+		return err
+	}
 
 	// send tx publicIP to receiver
-	_, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command)
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command); err != nil {
+		return err
+	}
 
 	// send rx localIP to tx
 	_, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, command)
