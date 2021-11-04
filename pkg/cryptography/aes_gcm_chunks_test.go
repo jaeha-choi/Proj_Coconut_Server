@@ -19,16 +19,11 @@ func TestEncryptDecrypt(t *testing.T) {
 		}
 	}()
 	testFileN := "../testdata/checksum.txt"
-	_, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
+
+	privKey, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-	privKey, err := PemToKeys(privPem)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in PemToKeys")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 
@@ -126,30 +121,18 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}()
 
 	// Client 1
-	_, privPem1, err := OpenKeysAsBlock("../testdata/keypair1")
+	privKey1, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-	privKey1, err := PemToKeys(privPem1)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in PemToKeys")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 
 	// Client 2
-	_, privPem2, err := OpenKeysAsBlock("../testdata/keypair2")
+	privKey2, err := OpenPrivKey("../testdata/keypairFox/", "fox.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-	privKey2, err := PemToKeys(privPem2)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in PemToKeys")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 

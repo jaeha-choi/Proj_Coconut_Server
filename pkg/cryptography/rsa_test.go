@@ -36,37 +36,28 @@ func TestCreateRSAKey(t *testing.T) {
 }
 
 func TestOpenKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
-	if pubPem == nil || privPem == nil || err != nil {
+	pem, err := OpenKeysAsBlock("../testdata/keypairCat/", "cat.pub")
+	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
-}
-
-func TestPemToKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
-	if pubPem == nil || privPem == nil || err != nil {
+	pem, err = OpenKeysAsBlock("../testdata/keypairCat/", "cat.priv")
+	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-
-	if privKey, err := PemToKeys(privPem); privKey == nil || err != nil {
-		log.Debug(err)
-		log.Error("Error in PemToKeys")
 		return
 	}
 }
 
 func TestPemToSha256(t *testing.T) {
-	pubPem, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
-	if pubPem == nil || privPem == nil || err != nil {
+	pem, err := OpenKeysAsBlock("../testdata/keypairCat/", "cat.pub")
+	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
-	PemToSha256(pubPem)
+	PemToSha256(pem)
 }
 
 func TestGenAESKey(t *testing.T) {
@@ -86,19 +77,11 @@ func TestBytesToBase64(t *testing.T) {
 }
 
 func TestKeyEncryptSignAESKey(t *testing.T) {
-	// Open Key as PEM
-	_, privPem, err := OpenKeysAsBlock("../testdata/keypair1/")
+	// Open Key
+	privKey, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-
-	// Convert PEM to key structs
-	privKey, err := PemToKeys(privPem)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in PemToKeys")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 
@@ -122,37 +105,21 @@ func TestKeyEncryptSignAESKey(t *testing.T) {
 
 func TestKeyEncryptDecryptAESKey(t *testing.T) {
 
-	// Client 1
-	// Open Key as PEM
-	_, privPem1, err := OpenKeysAsBlock("../testdata/keypair1/")
+	// Client Cat
+	// Open Key
+	privKey1, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 
-	// Convert PEM to key structs
-	privKey1, err := PemToKeys(privPem1)
+	// Client Fox
+	// Open Key
+	privKey3, err := OpenPrivKey("../testdata/keypairFox/", "Fox.priv")
 	if err != nil {
 		log.Debug(err)
-		t.Error("Error in PemToKeys")
-		return
-	}
-
-	// Client 3
-	// Open Key as PEM
-	_, privPem3, err := OpenKeysAsBlock("../testdata/keypair3/")
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in OpenKeysAsBlock")
-		return
-	}
-
-	// Convert PEM to key structs
-	privKey3, err := PemToKeys(privPem3)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in PemToKeys")
+		t.Error("Error in OpenPrivKey")
 		return
 	}
 
