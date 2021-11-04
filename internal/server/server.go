@@ -482,49 +482,53 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	rxCli := c.(*client)
 	// if rx terminated the connection, set writeResToRx to false,
 	// so that server doesn't send result to rx
-	var writeResToRx = true
+	//var writeResToRx = true
 
 	// 0. Send HandleRequestP2P command to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, rxCommand); err != nil {
 		return err
 	}
 
+	// TODO: Fix writing result to rx
 	// Write result to rx if writeResToRx is true
-	defer func() {
-		if !writeResToRx {
-			return
-		}
-		var cErr *common.Error
-		if err != nil {
-			log.Debug("rx error: ", err)
-			if cErr, ok = err.(*common.Error); !ok {
-				cErr = common.GeneralServerError
-			}
-		} else {
-			cErr = nil
-		}
-		_, _ = util.WriteMessage(rxCli.connToClient, []byte(txHash), cErr, rxCommand)
-	}()
+	//defer func() {
+	//	if !writeResToRx {
+	//		return
+	//	}
+	//	var cErr *common.Error
+	//	if err != nil {
+	//		log.Debug("rx error: ", err)
+	//		if cErr, ok = err.(*common.Error); !ok {
+	//			cErr = common.GeneralServerError
+	//		}
+	//	} else {
+	//		cErr = nil
+	//	}
+	//	_, _ = util.WriteMessage(rxCli.connToClient, []byte(txHash), cErr, rxCommand)
+	//}()
 
-	// 1b. Wait for the rx to be ready
-	if _, err = util.ReadMessage(rxCli.connToClient); err != nil {
-		return err
-	}
-
+	// TODO: Fix reading from rx
+	//// 1b. Wait for the rx to be ready
+	//if _, err = util.ReadMessage(rxCli.connToClient); err != nil {
+	//	log.Debug(err)
+	//	return err
+	//}
+	log.Debug("1b ", err)
 	// 2b. Send tx public key hash to rx
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, rxCommand); err != nil {
 		return err
 	}
 
+	// TODO: Fix reading from rx
 	// 3b. Check if tx was found by rx contact map
-	if msg, err := util.ReadMessage(rxCli.connToClient); err != nil {
-		return err
-	} else if msg.ErrorCode != 0 {
-		// Rx terminated the connection; don't send result to rx as it won't be received
-		writeResToRx = false
-		return common.ErrorCodes[msg.ErrorCode]
-	}
-
+	//if msg, err := util.ReadMessage(rxCli.connToClient); err != nil {
+	//	return err
+	//} else if msg.ErrorCode != 0 {
+	//	// Rx terminated the connection; don't send result to rx as it won't be received
+	//	//writeResToRx = false
+	//	return common.ErrorCodes[msg.ErrorCode]
+	//}
+	log.Debug("3b ", err)
 	// 4b. Send tx localIP:localPort to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, rxCommand); err != nil {
 		return err
