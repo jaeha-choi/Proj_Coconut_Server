@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 )
 
 const (
@@ -444,7 +445,6 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err error) {
 	var command = common.RequestP2P
 	var rxCommand = common.RequestP2P // TODO: Update to HandleRequestP2P
-
 	log.Info("Peer-to-Peer request from: ", txConn.RemoteAddr())
 	c, exists := serv.devices.Load(txHash)
 	if !exists {
@@ -459,6 +459,7 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 
 	// 2a. Receive rx public key hash
 	txMsg, err := util.ReadMessage(txConn)
+	log.Debug("2a: ", string(txMsg.Data))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while connecting to the server")
@@ -478,16 +479,17 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
-
+	log.Debug("3a")
 	rxCli := c.(*client)
 	// if rx terminated the connection, set writeResToRx to false,
 	// so that server doesn't send result to rx
 	//var writeResToRx = true
-
 	// 0. Send HandleRequestP2P command to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, rxCommand); err != nil {
 		return err
 	}
+	log.Debug("0")
+	time.Sleep(500 * time.Millisecond)
 
 	// TODO: Fix writing result to rx
 	// Write result to rx if writeResToRx is true
@@ -508,12 +510,16 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	//}()
 
 	// TODO: Fix reading from rx
-	//// 1b. Wait for the rx to be ready
-	//if _, err = util.ReadMessage(rxCli.connToClient); err != nil {
+	//// 1b. Wait for the rx to be ready'
+	//log.Debug("before read")
+	//msg, err := util.ReadMessage(rxCli.connToClient)
+	//log.Debug("directly after read", err, string(msg.Data), msg.ErrorCode, msg.CommandCode)
+	//if err != nil {
 	//	log.Debug(err)
 	//	return err
 	//}
-	log.Debug("1b ", err)
+	//log.Debug("after read")
+	//log.Debug("1b ", string(msg.Data), msg.ErrorCode, msg.CommandCode)
 	// 2b. Send tx public key hash to rx
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, rxCommand); err != nil {
 		return err
@@ -606,6 +612,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	isQuit := false
 	for !isQuit {
 		m, e := util.ReadMessage(conn)
+		fmt.Println("read message in command handler", string(m.Data), m.CommandCode)
 		if e != nil {
 			return e
 		}
@@ -621,6 +628,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.RequestPubKey:
 			err = serv.handleRequestPubKey(conn)
 		case common.RequestP2P:
+			fmt.Println("entering handleDoRequestP2P")
 			err = serv.handleDoRequestP2P(conn, pubKeyHash)
 		case common.Quit:
 			isQuit = true
