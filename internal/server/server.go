@@ -445,7 +445,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err error) {
 	var command = common.RequestP2P
 	var rxCommand = common.RequestP2P // TODO: Update to HandleRequestP2P
-	log.Info("Peer-to-Peer request from: ", txConn.RemoteAddr())
+	log.Info("Client ", txHash[:debugClientNameLen], ": Peer-to-Peer request from: ", txConn.RemoteAddr())
 	c, exists := serv.devices.Load(txHash)
 	if !exists {
 		return common.ClientNotFoundError
@@ -459,7 +459,6 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 
 	// 2a. Receive rx public key hash
 	txMsg, err := util.ReadMessage(txConn)
-	log.Debug("2a: ", string(txMsg.Data))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while connecting to the server")
@@ -479,8 +478,8 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
 		return err
 	}
-	log.Debug("3a")
 	rxCli := c.(*client)
+	log.Info("Client ", txHash[:debugClientNameLen], ": Request to Connect to: ", rxCli.pubKeyHash[:debugClientNameLen], " at ", rxCli.publicAddr)
 	// if rx terminated the connection, set writeResToRx to false,
 	// so that server doesn't send result to rx
 	//var writeResToRx = true
@@ -488,7 +487,6 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, rxCommand); err != nil {
 		return err
 	}
-	log.Debug("0")
 	time.Sleep(500 * time.Millisecond)
 
 	// TODO: Fix writing result to rx
@@ -534,7 +532,6 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	//	//writeResToRx = false
 	//	return common.ErrorCodes[msg.ErrorCode]
 	//}
-	log.Debug("3b ", err)
 	// 4b. Send tx localIP:localPort to receiver
 	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, rxCommand); err != nil {
 		return err
