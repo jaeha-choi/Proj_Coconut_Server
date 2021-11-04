@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"time"
 )
 
 const (
@@ -333,77 +332,6 @@ func (serv *Server) handleQuit(pubKeyHash string) {
 	log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Unregistered")
 }
 
-func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	var command = common.GetAddCode
-	addCode, err := serv.getAddCode(pubKeyHash)
-	if err != nil {
-		return err
-	}
-	_, err = util.WriteMessage(conn, []byte(fmt.Sprintf("%06d", addCode)), nil, command)
-	if err != nil {
-		return err
-	}
-
-	log.Debugf("Client %s: Allocated Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
-
-	return nil
-}
-
-func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err error) {
-	// Get Add Code
-	msg, err := util.ReadMessage(conn)
-	if err != nil {
-		return err
-	}
-	addCode, err := strconv.Atoi(string(msg.Data))
-	if err != nil {
-		return err
-	}
-	if err = serv.removeAddCode(addCode, pubKeyHash); err != nil {
-		return err
-	}
-
-	log.Debugf("Client %s: Freed Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
-
-	return nil
-}
-
-// TODO: Work in progress
-func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
-	msg, err := util.ReadMessage(conn)
-	if err != nil {
-		return err
-	}
-	c, ok := serv.devices.Load(string(msg.Data))
-	if !ok || c == nil {
-		log.Debug(common.ClientNotFoundError)
-		return common.ClientNotFoundError
-	}
-
-	receiver := c.(*client)
-
-	var endNow string
-	for endNow == common.EndRelay.String {
-		// TODO: Send command/Result to rx?
-		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
-		if err != nil {
-			log.Debug(err)
-			log.Debug("Relayed bytes count: ", written)
-			log.Error("Error while relaying data")
-			return err
-		}
-		// TODO: Fix
-		//end, err := util.ReadBytes(conn)
-		//if err != nil {
-		//	log.Debug(err)
-		//	return err
-		//}
-		//endNow = string(end)
-	}
-
-	return nil
-}
-
 func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 	var command = common.GetPubKey
 	msg, err := util.ReadMessage(conn)
@@ -441,6 +369,190 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 	return nil
 }
 
+func (serv *Server) handleRemoveAddCode(conn net.Conn, pubKeyHash string) (err error) {
+	// Get Add Code
+	msg, err := util.ReadMessage(conn)
+	if err != nil {
+		return err
+	}
+	addCode, err := strconv.Atoi(string(msg.Data))
+	if err != nil {
+		return err
+	}
+	if err = serv.removeAddCode(addCode, pubKeyHash); err != nil {
+		return err
+	}
+
+	log.Debugf("Client %s: Freed Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
+
+	return nil
+}
+
+func (serv *Server) handleGetAddCode(conn net.Conn, pubKeyHash string) (err error) {
+	var command = common.GetAddCode
+	addCode, err := serv.getAddCode(pubKeyHash)
+	if err != nil {
+		return err
+	}
+	_, err = util.WriteMessage(conn, []byte(fmt.Sprintf("%06d", addCode)), nil, command)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("Client %s: Allocated Add Code [%06d]", pubKeyHash[:debugClientNameLen], addCode)
+
+	return nil
+}
+
+// TODO: Work in progress
+func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
+	// Read rx public key hash
+	msg, err := util.ReadMessage(conn)
+	if err != nil {
+		return err
+	}
+	c, ok := serv.devices.Load(string(msg.Data))
+	if !ok || c == nil {
+		log.Debug(common.ClientNotFoundError)
+		return common.ClientNotFoundError
+	}
+
+	receiver := c.(*client)
+
+	var endNow string
+	for endNow == common.EndRelay.String {
+		// TODO: Send command/Result to rx?
+		written, err := util.ReadBytesToWriter(conn, receiver.connToClient, true)
+		if err != nil {
+			log.Debug(err)
+			log.Debug("Relayed bytes count: ", written)
+			log.Error("Error while relaying data")
+			return err
+		}
+		// TODO: Fix
+		//end, err := util.ReadBytes(conn)
+		//if err != nil {
+		//	log.Debug(err)
+		//	return err
+		//}
+		//endNow = string(end)
+	}
+
+	return nil
+}
+
+func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err error) {
+	var command = common.RequestP2P
+	var rxCommand = common.RequestP2P // TODO: Update to HandleRequestP2P
+
+	log.Info("Peer-to-Peer request from: ", txConn.RemoteAddr())
+	c, exists := serv.devices.Load(txHash)
+	if !exists {
+		return common.ClientNotFoundError
+	}
+	// 1a. Write error code for finding tx client
+	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
+		return err
+	}
+
+	txClient := c.(*client)
+
+	// 2a. Receive rx public key hash
+	txMsg, err := util.ReadMessage(txConn)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while connecting to the server")
+		return err
+	}
+
+	// TODO create error for nil hash
+	// 3a. Write error code for finding rx client
+	if txMsg.Data == nil {
+		return common.GeneralServerError
+	}
+	// Get client structure of peer using rx public key hash
+	c, ok := serv.devices.Load(string(txMsg.Data))
+	if !ok || c == nil {
+		return common.ClientNotFoundError
+	}
+	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
+		return err
+	}
+
+	rxCli := c.(*client)
+	// if rx terminated the connection, set writeResToRx to false,
+	// so that server doesn't send result to rx
+	//var writeResToRx = true
+
+	// 0. Send HandleRequestP2P command to receiver
+	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, rxCommand); err != nil {
+		return err
+	}
+
+	// TODO: Fix writing result to rx
+	// Write result to rx if writeResToRx is true
+	//defer func() {
+	//	if !writeResToRx {
+	//		return
+	//	}
+	//	var cErr *common.Error
+	//	if err != nil {
+	//		log.Debug("rx error: ", err)
+	//		if cErr, ok = err.(*common.Error); !ok {
+	//			cErr = common.GeneralServerError
+	//		}
+	//	} else {
+	//		cErr = nil
+	//	}
+	//	_, _ = util.WriteMessage(rxCli.connToClient, []byte(txHash), cErr, rxCommand)
+	//}()
+
+	// TODO: Fix reading from rx
+	//// 1b. Wait for the rx to be ready
+	//if _, err = util.ReadMessage(rxCli.connToClient); err != nil {
+	//	log.Debug(err)
+	//	return err
+	//}
+	log.Debug("1b ", err)
+	// 2b. Send tx public key hash to rx
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, rxCommand); err != nil {
+		return err
+	}
+
+	// TODO: Fix reading from rx
+	// 3b. Check if tx was found by rx contact map
+	//if msg, err := util.ReadMessage(rxCli.connToClient); err != nil {
+	//	return err
+	//} else if msg.ErrorCode != 0 {
+	//	// Rx terminated the connection; don't send result to rx as it won't be received
+	//	//writeResToRx = false
+	//	return common.ErrorCodes[msg.ErrorCode]
+	//}
+	log.Debug("3b ", err)
+	// 4b. Send tx localIP:localPort to receiver
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.localAddr), nil, rxCommand); err != nil {
+		return err
+	}
+
+	// 5b. Send tx publicIP:publicPort to receiver
+	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, rxCommand); err != nil {
+		return err
+	}
+
+	// 4a. Send rx localIP:localPort to tx
+	if _, err = util.WriteMessage(txConn, []byte(rxCli.localAddr), nil, command); err != nil {
+		return err
+	}
+
+	// 5a. Send rx publicIP:publicPort to tx
+	if _, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, command); err != nil {
+		return err
+	}
+
+	// 6. Write result to rx (with defer statement) and tx
+	return err
+}
+
 func writeResult(conn net.Conn, errorToWrite error, command *common.Command) (err error) {
 	var e *common.Error
 	if errorToWrite != nil {
@@ -459,120 +571,6 @@ func writeResult(conn net.Conn, errorToWrite error, command *common.Command) (er
 		return err
 	}
 	return nil
-}
-
-func (serv *Server) Start() (err error) {
-	listener, err := tls.Listen("tcp", fmt.Sprint(serv.Host, ":", serv.Port), serv.tls)
-	if err != nil {
-		log.Debug(err)
-		log.Fatal("Listener cannot be initialized")
-		os.Exit(1)
-	}
-	defer func() {
-		if e := listener.Close(); e != nil {
-			log.Debug(err)
-			log.Error("Error while closing listener")
-			err = e
-		}
-	}()
-	for {
-		// tlsConn is closed in connectionHandler to prevent
-		// memory leak caused by using defer in a loop
-		tlsConn, err := listener.Accept()
-		if err != nil {
-			log.Debug(err)
-			log.Warning("Error while accepting connection")
-			return err
-		}
-		log.Info("--- New connection established ---")
-		log.Info("RemoteAddr: ", tlsConn.RemoteAddr())
-		go func() {
-			if e := serv.connectionHandler(tlsConn); e != nil {
-				log.Debug(e)
-				log.Error("Error returned by connectionHandler")
-			}
-		}()
-	}
-	return err
-}
-
-// handleInitP2P
-/*
-	Order of operations for initiating client (tx):
-	Initiate p2p with common.RequestP2P command
-	Send PubKey hash of peer in which to connect to (rx)
-	Accept local IP of rx
-	Accept remote IP of rx
-*/
-
-func (serv *Server) handleInitP2P(txConn net.Conn, txHash string) (err error) {
-	var command = common.RequestP2P
-	log.Info("Client ", txHash[:debugClientNameLen], ": P2P Request ", txConn.RemoteAddr())
-	a, exists := serv.devices.Load(txHash)
-	if !exists {
-		return common.ClientNotFoundError
-	}
-	// 1a write init common.RequestP2P command to tx
-	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
-		return err
-	}
-
-	txClient := a.(*client)
-	// 1b read rxhash from tx txclient
-	txMsg, err := util.ReadMessage(txConn)
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while connecting to the server")
-		return err
-	}
-	// TODO create error for nil hash
-	if txMsg.Data == nil {
-		return common.GeneralServerError
-	}
-
-	// 2a write
-	if _, err = util.WriteMessage(txConn, nil, nil, command); err != nil {
-		return err
-	}
-
-	// get client structure of peer
-	c, ok := serv.devices.Load(string(txMsg.Data))
-	if !ok || c == nil {
-		_, err = util.WriteMessage(txConn, nil, common.ClientNotFoundError, common.RequestP2P)
-		return common.ClientNotFoundError
-	}
-
-	rxCli := c.(*client)
-
-	// send requestP2P command to receiver
-	if _, err = util.WriteMessage(rxCli.connToClient, nil, nil, command); err != nil {
-		return err
-	}
-	//defer func(conn net.Conn, errorToWrite error, command *common.Command) {
-	//	err := writeResult(conn, errorToWrite, command)
-	//	if err != nil {
-	//
-	//	}
-	//}(rxCli.connToClient, nil, command)
-	time.Sleep(500 * time.Millisecond)
-	// send tx pkhash to receiver
-	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txHash), nil, command); err != nil {
-		return err
-	}
-
-	// send tx publicIP to receiver
-	if _, err = util.WriteMessage(rxCli.connToClient, []byte(txClient.publicAddr), nil, command); err != nil {
-		return err
-	}
-
-	// send rx publicIP to tx
-	_, err = util.WriteMessage(txConn, []byte(rxCli.publicAddr), nil, command)
-	if err != nil {
-		log.Error("Error writing to client")
-		return err
-	}
-
-	return err
 }
 
 func (serv *Server) connectionHandler(conn net.Conn) (err error) {
@@ -623,7 +621,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.RequestPubKey:
 			err = serv.handleRequestPubKey(conn)
 		case common.RequestP2P:
-			err = serv.handleInitP2P(conn, pubKeyHash)
+			err = serv.handleDoRequestP2P(conn, pubKeyHash)
 		case common.Quit:
 			isQuit = true
 		default:
@@ -635,5 +633,40 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		}
 	}
 
+	return err
+}
+
+func (serv *Server) Start() (err error) {
+	listener, err := tls.Listen("tcp", fmt.Sprint(serv.Host, ":", serv.Port), serv.tls)
+	if err != nil {
+		log.Debug(err)
+		log.Fatal("Listener cannot be initialized")
+		os.Exit(1)
+	}
+	defer func() {
+		if e := listener.Close(); e != nil {
+			log.Debug(err)
+			log.Error("Error while closing listener")
+			err = e
+		}
+	}()
+	for {
+		// tlsConn is closed in connectionHandler to prevent
+		// memory leak caused by using defer in a loop
+		tlsConn, err := listener.Accept()
+		if err != nil {
+			log.Debug(err)
+			log.Warning("Error while accepting connection")
+			return err
+		}
+		log.Info("--- New connection established ---")
+		log.Info("RemoteAddr: ", tlsConn.RemoteAddr())
+		go func() {
+			if e := serv.connectionHandler(tlsConn); e != nil {
+				log.Debug(e)
+				log.Error("Error returned by connectionHandler")
+			}
+		}()
+	}
 	return err
 }
