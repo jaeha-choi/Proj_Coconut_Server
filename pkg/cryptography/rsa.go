@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -33,91 +34,63 @@ func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 
 // OpenPubKey opens public key named keyFileN in keyPath
 func OpenPubKey(keyPath string, keyFileN string) (pubKey *rsa.PublicKey, err error) {
-	pubFileN := filepath.Join(keyPath, keyFileN)
-	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
-		// Read existing pubKey file
-		pubFileBytes, err := ioutil.ReadFile(pubFileN)
-		if err != nil {
-			log.Debug(err)
-			log.Error("Error while opening RSA pubKey in OpenKeysAsBlock")
-			return nil, err
-		}
-		// Decode file and create block
-		pubBlock, _ := pem.Decode(pubFileBytes)
-		if pubBlock == nil {
-			log.Error("Error while decoding pubKey file")
-			return nil, err
-		}
-
-		if pubKey, err = x509.ParsePKCS1PublicKey(pubBlock.Bytes); err != nil {
-			log.Debug(err)
-			log.Error("Error while converting PEM block to keys")
-			return nil, err
-		}
-		return pubKey, err
-	} else {
-		log.Debug(err)
-		log.Error("pub key does not exist: " + keyFileN)
+	block, err := OpenKeysAsBlock(keyPath, keyFileN)
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	if pubKey, err = x509.ParsePKCS1PublicKey(block.Bytes); err != nil {
+		log.Debug(err)
+		log.Error("Error while converting PEM block to keys")
+		return nil, err
+	}
+	return pubKey, err
 }
 
-// OpenKeysAsBlock open existing keys and return them as *pem.Block.
-// If keys are not found, new keys will be created.
-func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err error) {
-	pubFileN := filepath.Join(keyPath, "key.pub")
-	privFileN := filepath.Join(keyPath, "key.priv")
+// OpenPrivKey opens private key named keyFileN in keyPath
+func OpenPrivKey(keyPath string, keyFileN string) (privKey *rsa.PrivateKey, err error) {
+	block, err := OpenKeysAsBlock(keyPath, keyFileN)
+	if err != nil {
+		return nil, err
+	}
+	if privKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
+		log.Debug(err)
+		log.Error("Error while converting PEM block to keys")
+		return nil, err
+	}
+	return privKey, err
+}
 
-	// Check if keys already exist
-	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
-
-		// Read existing pubKey file
-		pubFileBytes, err := ioutil.ReadFile(pubFileN)
-		if err != nil {
-			log.Debug(err)
-			log.Error("Error while opening RSA pubKey in OpenKeysAsBlock")
-			return nil, nil, err
-		}
-		// Decode file and create block
-		pubBlock, _ = pem.Decode(pubFileBytes)
-		if pubBlock == nil {
-			log.Error("Error while decoding pubKey file")
-			return nil, nil, err
-		}
-
-		// Read existing privKey file
-		privFileBytes, err := ioutil.ReadFile(privFileN)
-		if err != nil {
-			log.Debug(err)
-			log.Error("Error while opening RSA private key file in OpenKeysAsBlock")
-			return nil, nil, err
-		}
-		// Decode file and create block
-		privBlock, _ = pem.Decode(privFileBytes)
-		if privBlock == nil {
-			log.Error("Error while decoding priv file")
-			return nil, nil, err
-		}
-	} else if os.IsNotExist(err) {
-		// Create directory if it doesn't exist
+// OpenKeysAsBlock open keys and return them as *pem.Block.
+//
+// If keyName ends with .priv
+// - return private key block if found
+// - return newly created private key pem block if not found
+// If keyName ends anything else
+// - return public key block if found
+// - return err if not found
+func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err error) {
+	keyF := filepath.Join(keyPath, keyName)
+	if _, err = os.Stat(keyF); os.IsNotExist(err) && strings.HasSuffix(keyName, ".priv") {
 		if err := os.MkdirAll(keyPath, os.ModePerm); err != nil {
 			log.Debug(err)
 			log.Error("Error while creating key directory")
-			return nil, nil, err
+			return nil, err
 		}
+
 		// Create new RSA key pair
 		key, err := createRSAKey(rsaKeyBitSize)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating RSA key in OpenKeysAsBlock")
-			return nil, nil, err
+			return nil, err
 		}
-		// Open pubKey file
-		pubOut, err := os.Create(pubFileN)
+
+		// Create pubKey file
+		pubOut, err := os.Create(keyF + ".pub")
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating pubKey file")
-			return nil, nil, err
+			return nil, err
 		}
 		// Close pubKey file when done
 		defer func() {
@@ -127,7 +100,7 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 				err = errDef
 				return
 			}
-			if errDef := os.Chmod(pubFileN, 0644); errDef != nil {
+			if errDef := os.Chmod(keyF+".pub", 0644); errDef != nil {
 				log.Debug(errDef)
 				log.Error("Error while updating pubKey file permissions")
 				err = errDef
@@ -135,24 +108,24 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 			}
 		}()
 		// Create PEM block
-		pubBlock = &pem.Block{
+		block := &pem.Block{
 			Type:    "RSA PUBLIC KEY",
 			Headers: nil,
 			Bytes:   x509.MarshalPKCS1PublicKey(&key.PublicKey),
 		}
 		// Write PEM block to pubKey file
-		if err := pem.Encode(pubOut, pubBlock); err != nil {
+		if err := pem.Encode(pubOut, block); err != nil {
 			log.Debug(err)
 			log.Error("Error while writing to pubKey file")
-			return nil, nil, err
+			return nil, err
 		}
 
 		// Create privKey file
-		privOut, err := os.OpenFile(privFileN, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+		privOut, err := os.OpenFile(keyF+".priv", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating private key in OpenKeysAsBlock")
-			return nil, nil, err
+			return nil, err
 		}
 		// Close privKey file when done
 		defer func() {
@@ -162,7 +135,7 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 				err = errDef
 				return
 			}
-			if errDef := os.Chmod(privFileN, 0600); errDef != nil {
+			if errDef := os.Chmod(keyF+".priv", 0600); errDef != nil {
 				log.Debug(errDef)
 				log.Error("Error while updating permissions")
 				err = errDef
@@ -170,34 +143,31 @@ func OpenKeysAsBlock(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block,
 			}
 		}()
 		// Create PEM block
-		privBlock = &pem.Block{
+		keyBlock = &pem.Block{
 			Type:    "RSA PRIVATE KEY",
 			Headers: nil,
 			Bytes:   x509.MarshalPKCS1PrivateKey(key),
 		}
 		// Write PEM block to privKey file
-		if err := pem.Encode(privOut, privBlock); err != nil {
+		if err := pem.Encode(privOut, keyBlock); err != nil {
 			log.Debug(err)
 			log.Error("Error while encoding private key")
-			return nil, nil, err
+			return nil, err
 		}
-	} else {
-		log.Debug(err)
-		log.Error("Error while checking stat of the file")
-	}
-	return pubBlock, privBlock, err
-}
 
-// PemToKeys convert private PEM block to rsa.PrivateKey struct.
-// *rsa.PrivateKey contains public key as well, so access public key
-// with key.PublicKey
-func PemToKeys(privBlock *pem.Block) (privKey *rsa.PrivateKey, err error) {
-	if privKey, err = x509.ParsePKCS1PrivateKey(privBlock.Bytes); err != nil {
-		log.Debug(err)
-		log.Error("Error while converting PEM block to keys")
+		// Return newly generated private key block
+		return keyBlock, err
+	} else if err != nil {
 		return nil, err
 	}
-	return privKey, nil
+	fileBytes, err := ioutil.ReadFile(keyF)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while opening RSA pubKey in OpenKeysAsBlock")
+		return nil, err
+	}
+	keyBlock, _ = pem.Decode(fileBytes)
+	return keyBlock, err
 }
 
 // PemToSha256 generates bytes containing sha256sum of pubBlock bytes.
