@@ -231,7 +231,7 @@ func (serv *Server) addDevice(pubKeyHash string, lAddr string, conn net.Conn) {
 		publicAddr:       conn.RemoteAddr().String(),
 	}
 	// Add device public key hash to online devices
-	log.Info(newClient.localAddr)
+	log.Info("LocalAddr: ", newClient.localAddr)
 	serv.devices.Store(pubKeyHash, newClient)
 }
 
@@ -322,7 +322,7 @@ func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
 	}
 
 	serv.addDevice(pubKeyHashStr, string(msg.Data), conn)
-	log.Info(pubKeyHashStr)
+	log.Info("CLient PubKeyHash: ", pubKeyHashStr)
 	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
 
 	return pubKeyHashStr, nil
@@ -479,7 +479,7 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 		return err
 	}
 	rxCli := c.(*client)
-	log.Info("Client ", txHash[:debugClientNameLen], ": Request to Connect to: ", rxCli.pubKeyHash[:debugClientNameLen], " at ", rxCli.publicAddr)
+	log.Info("Client ", txHash[:debugClientNameLen], ": Request to Connect to: ", string(txMsg.Data[:debugClientNameLen]), " at ", rxCli.publicAddr)
 	// if rx terminated the connection, set writeResToRx to false,
 	// so that server doesn't send result to rx
 	//var writeResToRx = true
@@ -508,7 +508,7 @@ func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err erro
 	//}()
 
 	// TODO: Fix reading from rx
-	//// 1b. Wait for the rx to be ready'
+	//// 1b. Wait for the rx to be ready
 	//log.Debug("before read")
 	//msg, err := util.ReadMessage(rxCli.connToClient)
 	//log.Debug("directly after read", err, string(msg.Data), msg.ErrorCode, msg.CommandCode)
@@ -609,7 +609,6 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	isQuit := false
 	for !isQuit {
 		m, e := util.ReadMessage(conn)
-		fmt.Println("read message in command handler", string(m.Data), m.CommandCode)
 		if e != nil {
 			return e
 		}
