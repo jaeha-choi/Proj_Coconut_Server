@@ -370,15 +370,15 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	defer func() {
 		_ = writeResult(cli.connToClient, err, command)
 	}()
-	msg, _ = util.ReadMessage(cli.connToClient)
-	log.Debug(string(msg.Data))
-	_, _ = util.WriteMessage(conn, msg.Data, nil, command)
-	//if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
-	//	log.Debug(err)
-	//	log.Error("Error while relaying public key from rx")
-	//
-	//	return err
-	//}
+	//msg, _ = util.ReadMessage(cli.connToClient)
+	//log.Debug(string(msg.Data))
+	//_, _ = util.WriteMessage(conn, msg.Data, nil, command)
+	if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
+		log.Debug(err)
+		log.Error("Error while relaying public key from rx")
+
+		return err
+	}
 	log.Info("wrote to writer")
 
 	return nil
@@ -622,6 +622,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	isQuit := false
 	for !isQuit {
 		m, e := util.ReadMessage(conn)
+		fmt.Println("Command Handler: ", conn.RemoteAddr(), string(m.Data), m.ErrorCode, m.CommandCode)
 		if e != nil {
 			return e
 		}
@@ -639,7 +640,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.RequestP2P:
 			err = serv.handleDoRequestP2P(conn, pubKeyHash)
 		case common.Pause:
-			log.Error("Pause command from ", conn.RemoteAddr())
+			fmt.Println("Pause command from ", conn.RemoteAddr())
 			_ = <-serv.channel
 		case common.Quit:
 			isQuit = true
