@@ -67,10 +67,10 @@ var RequestP2P = &Command{
 // File command is used when exchanging encrypted files
 var File = &Command{
 	String: "FILE",
-	Code:   11,
+	Code:   10,
 }
 
 var Pause = &Command{
 	String: "PAUS",
-	Code:   12,
+	Code:   11,
 }
