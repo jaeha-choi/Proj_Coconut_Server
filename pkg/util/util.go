@@ -249,6 +249,7 @@ func BytesToBase64(data []byte) []byte {
 // Common usage for this function is to read from net.Conn, and write to temp file.
 func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (n int, err error) {
 	// Read message size
+	log.Info("read to writer")
 	size, err := readSize(reader)
 	if err != nil {
 		return 0, err

@@ -66,6 +66,8 @@ type Server struct {
 	devices sync.Map
 
 	tls *tls.Config
+
+	channel chan int
 }
 
 // init initializes logger and set mRand seed
@@ -322,7 +324,7 @@ func (serv *Server) handleInit(conn net.Conn) (pubKeyH string, err error) {
 	}
 
 	serv.addDevice(pubKeyHashStr, string(msg.Data), conn)
-	log.Info("CLient PubKeyHash: ", pubKeyHashStr)
+	log.Info("Client PubKeyHash: ", pubKeyHashStr)
 	log.Debug("Client " + pubKeyHashStr[:debugClientNameLen] + ": Registered")
 
 	return pubKeyHashStr, nil
@@ -333,12 +335,18 @@ func (serv *Server) handleQuit(pubKeyHash string) {
 	log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Unregistered")
 }
 
-func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
+func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
+	log.Info("request pubkey ", conn.RemoteAddr())
+	defer func() {
+		serv.channel <- 0
+	}()
+	log.Debug(conn.RemoteAddr())
 	var command = common.GetPubKey
 	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
+	log.Info("read: ", string(msg.Data))
 	rxAddCode, err := strconv.Atoi(string(msg.Data))
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
 	serv.addCodeArrMutex.RLock()
@@ -351,6 +359,8 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
+	log.Info("client found")
+
 	if _, err = util.WriteMessage(cli.connToClient, nil, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending command to rx client")
@@ -360,13 +370,17 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) {
 	defer func() {
 		_ = writeResult(cli.connToClient, err, command)
 	}()
+	msg, _ = util.ReadMessage(cli.connToClient)
+	log.Debug(string(msg.Data))
+	_, _ = util.WriteMessage(conn, msg.Data, nil, command)
+	//if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
+	//	log.Debug(err)
+	//	log.Error("Error while relaying public key from rx")
+	//
+	//	return err
+	//}
+	log.Info("wrote to writer")
 
-	if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
-		log.Debug(err)
-		log.Error("Error while relaying public key from rx")
-
-		return err
-	}
 	return nil
 }
 
@@ -444,7 +458,7 @@ func (serv *Server) handleRequestRelay(conn net.Conn) (err error) {
 
 func (serv *Server) handleDoRequestP2P(txConn net.Conn, txHash string) (err error) {
 	var command = common.RequestP2P
-	var rxCommand = common.RequestP2P // TODO: Update to HandleRequestP2P
+	var rxCommand = common.HandleRequestP2P // TODO: Update to HandleRequestP2P
 	log.Info("Client ", txHash[:debugClientNameLen], ": Peer-to-Peer request from: ", txConn.RemoteAddr())
 	c, exists := serv.devices.Load(txHash)
 	if !exists {
@@ -605,7 +619,6 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	defer func() {
 		serv.handleQuit(pubKeyHash)
 	}()
-
 	isQuit := false
 	for !isQuit {
 		m, e := util.ReadMessage(conn)
@@ -624,8 +637,10 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.RequestPubKey:
 			err = serv.handleRequestPubKey(conn)
 		case common.RequestP2P:
-			fmt.Println("entering handleDoRequestP2P")
 			err = serv.handleDoRequestP2P(conn, pubKeyHash)
+		case common.Pause:
+			log.Error("Pause command from ", conn.RemoteAddr())
+			_ = <-serv.channel
 		case common.Quit:
 			isQuit = true
 		default:
