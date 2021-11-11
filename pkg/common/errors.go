@@ -34,6 +34,7 @@ var ErrorCodes = [256]*Error{
 	NoAvailableAddCodeError,
 	ExistingConnError,
 	PeerUnavailableError,
+	PubKeyNotFoundError,
 }
 
 var UnknownCodeError = &Error{
@@ -92,6 +93,11 @@ var ExistingConnError = &Error{
 }
 
 var PeerUnavailableError = &Error{
-	Err:     errors.New("able to establish connection with peer"),
+	Err:     errors.New("unable to establish connection with peer"),
 	ErrCode: 12,
+}
+
+var PubKeyNotFoundError = &Error{
+	Err:     errors.New("public key of peer not found"),
+	ErrCode: 13,
 }

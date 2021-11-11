@@ -17,12 +17,14 @@ var CommandCodes = [256]*Command{
 	HandleRequestP2P,
 	RequestP2P,
 	File,
+	Pause,
 }
 
 var Init = &Command{
 	String: "INIT",
 	Code:   0,
 }
+
 var Quit = &Command{
 	String: "QUIT",
 	Code:   1,
@@ -66,4 +68,9 @@ var RequestP2P = &Command{
 var File = &Command{
 	String: "FILE",
 	Code:   11,
+}
+
+var Pause = &Command{
+	String: "PAUS",
+	Code:   12,
 }
