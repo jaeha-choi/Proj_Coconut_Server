@@ -335,6 +335,7 @@ func (serv *Server) handleQuit(pubKeyHash string) {
 	log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Unregistered")
 }
 
+// handleRequestPubKey handles the relaying of public key from RX to TX
 func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	log.Info("request pubkey ", conn.RemoteAddr())
 	defer func() {
