@@ -109,6 +109,7 @@ func InitConfig() (serv *Server, err error) {
 		tls:                 nil,
 		addCodeArrMutex:     &sync.RWMutex{},
 		nextAddCodeIdxMutex: &sync.Mutex{},
+		channel:             make(chan int),
 	}
 	serv.initAddCode()
 	if err := serv.tlsConfig(); err != nil {
@@ -339,7 +340,7 @@ func (serv *Server) handleQuit(pubKeyHash string) {
 func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	log.Info("request pubkey ", conn.RemoteAddr())
 	defer func() {
-		serv.channel <- 0
+		serv.channel <- 1
 	}()
 	log.Debug(conn.RemoteAddr())
 	var command = common.GetPubKey
@@ -622,10 +623,13 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	}()
 	isQuit := false
 	for !isQuit {
+		log.Debug("Waiting for Message")
 		m, e := util.ReadMessage(conn)
-		fmt.Println("Command Handler: ", conn.RemoteAddr(), string(m.Data), m.ErrorCode, m.CommandCode)
 		if e != nil {
 			return e
+		}
+		if conn == nil {
+			return common.ClosedConnError
 		}
 		command := common.CommandCodes[m.CommandCode]
 		log.Debug("Client " + pubKeyHash[:debugClientNameLen] + ": Command//" + command.String)
@@ -643,6 +647,8 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 		case common.Pause:
 			fmt.Println("Pause command from ", conn.RemoteAddr())
 			_ = <-serv.channel
+			fmt.Println("End pause command from ", conn.RemoteAddr())
+			continue
 		case common.Quit:
 			isQuit = true
 		default:
@@ -650,6 +656,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			return common.UnknownCommandError
 		}
 		if err = writeResult(conn, err, command); err != nil {
+			log.Debug("WRITING REFULT TO ", conn.RemoteAddr(), " ", command)
 			return err
 		}
 	}
