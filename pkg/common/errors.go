@@ -35,6 +35,7 @@ var ErrorCodes = [256]*Error{
 	ExistingConnError,
 	PeerUnavailableError,
 	PubKeyNotFoundError,
+	ClosedConnError,
 }
 
 var UnknownCodeError = &Error{
@@ -100,4 +101,9 @@ var PeerUnavailableError = &Error{
 var PubKeyNotFoundError = &Error{
 	Err:     errors.New("public key of peer not found"),
 	ErrCode: 13,
+}
+
+var ClosedConnError = &Error{
+	Err:     errors.New("connection was closed by peer"),
+	ErrCode: 14,
 }
