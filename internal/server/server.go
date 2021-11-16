@@ -343,12 +343,15 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 		serv.channel <- 1
 	}()
 	log.Debug(conn.RemoteAddr())
-	var command = common.GetPubKey
+	var command = common.RequestPubKey
 	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
 	log.Info("read: ", string(msg.Data))
+	if msg.Data == nil {
+		return common.GeneralServerError // TODO update error
+	}
 	rxAddCode, err := strconv.Atoi(string(msg.Data))
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
 	serv.addCodeArrMutex.RLock()
@@ -656,7 +659,6 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			return common.UnknownCommandError
 		}
 		if err = writeResult(conn, err, command); err != nil {
-			log.Debug("WRITING REFULT TO ", conn.RemoteAddr(), " ", command)
 			return err
 		}
 	}
