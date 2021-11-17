@@ -278,13 +278,13 @@ func (ag *AesGcmChunk) EncryptUDP(writer *net.UDPConn, address *net.UDPAddr, rec
 			return err
 		}
 		// Send IV in plain text
-		if _, err = util.WriteMessage(writer, iv, nil, command); err != nil {
+		if _, err = util.WriteMessageUDP(writer, address, iv, nil, command); err != nil {
 			log.Debug(err)
 			log.Error("Error in WriteBytes while sending iv")
 			return err
 		}
 		// Send encrypted file chunk + current chunk number (first two bytes)
-		if _, err = util.WriteMessage(writer, encryptedFileChunk, nil, command); err != nil {
+		if _, err = util.WriteMessageUDP(writer, address, encryptedFileChunk, nil, command); err != nil {
 			log.Debug(err)
 			log.Error("Error in WriteBytes while sending encryptedFileChunk")
 			return err
