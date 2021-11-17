@@ -232,6 +232,7 @@ func (serv *Server) addDevice(pubKeyHash string, lAddr string, conn net.Conn) {
 		connToClient:     conn,
 		localAddr:        lAddr,
 		publicAddr:       conn.RemoteAddr().String(),
+		pubKeyHash:       pubKeyHash,
 	}
 	// Add device public key hash to online devices
 	log.Info("LocalAddr: ", newClient.localAddr)
@@ -348,7 +349,6 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	if err != nil {
 		return err
 	}
-	log.Info("read: ", string(msg.Data))
 	if msg.Data == nil {
 		return common.GeneralServerError // TODO update error
 	}
@@ -364,7 +364,6 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 		return common.ClientNotFoundError
 	}
 	cli := c.(*client)
-	log.Info("client found")
 
 	if _, err = util.WriteMessage(cli.connToClient, nil, nil, command); err != nil {
 		log.Debug(err)
@@ -375,16 +374,17 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	defer func() {
 		_ = writeResult(cli.connToClient, err, command)
 	}()
-	//msg, _ = util.ReadMessage(cli.connToClient)
-	//log.Debug(string(msg.Data))
-	//_, _ = util.WriteMessage(conn, msg.Data, nil, command)
+	if _, err = util.WriteMessage(conn, []byte(cli.pubKeyHash), nil, command); err != nil {
+		log.Debug(err)
+		log.Error("Error while sending command to rx client")
+		return err
+	}
 	if _, err = util.ReadBytesToWriter(cli.connToClient, conn, true); err != nil {
 		log.Debug(err)
 		log.Error("Error while relaying public key from rx")
 
 		return err
 	}
-	log.Info("wrote to writer")
 
 	return nil
 }
@@ -609,6 +609,7 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	// If initialization fails, attempt to write the error code
 	// to the client, then close the connection
 	pubKeyHash, err := serv.handleInit(conn)
+
 	if _ = writeResult(conn, err, common.Init); err != nil {
 		log.Debug(err)
 		log.Error("Error while initializing client")
@@ -626,7 +627,6 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 	}()
 	isQuit := false
 	for !isQuit {
-		log.Debug("Waiting for Message")
 		m, e := util.ReadMessage(conn)
 		if e != nil {
 			return e
