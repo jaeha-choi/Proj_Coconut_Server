@@ -63,6 +63,25 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, err
 }
 
+func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
+	// Read packet size
+	_, addr, err = reader.ReadFromUDP(buffer)
+	if err != nil {
+		return nil, nil, err
+	}
+	size := binary.BigEndian.Uint32(buffer[0:4])
+	errorCode := buffer[4]
+	commandCode := buffer[5]
+
+	// Create new Message
+	msg = &Message{
+		Data:        buffer[6 : size+6],
+		ErrorCode:   errorCode,
+		CommandCode: commandCode,
+	}
+	return msg, addr, err
+}
+
 // WriteMessage write msg to writer. commandToWrite should not be nil
 // Returns int indicating the number of bytes written, and error, if any.
 // err == nil only if length of sent bytes = length of msg
