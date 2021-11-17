@@ -101,6 +101,44 @@ func WriteMessage(writer io.Writer, b []byte, errorToWrite *common.Error, comman
 	return writtenSize, err
 }
 
+// WriteMessageUDP write msg to UDP Address. commandToWrite should not be nil
+// Returns int indicating the number of bytes written, and error, if any.
+// err == nil only if length of sent bytes = length of msg
+func WriteMessageUDP(writer *net.UDPConn, address *net.UDPAddr, b []byte, errorToWrite *common.Error, commandToWrite *common.Command) (n int, err error) {
+	//// Return error if b is too big
+	//if len(b) > BufferSize {
+	//	log.Error("Byte should contain less than ", BufferSize)
+	//	return 0, SizeError
+	//}
+
+	// Check b len
+	size, err := IntToUint32(len(b))
+	if err != nil {
+		return 0, err
+	}
+
+	// Get error errCode
+	var errCode uint8 = 0
+	if errorToWrite != nil {
+		errCode = errorToWrite.ErrCode
+	}
+
+	// Create header
+	// First 4 bytes: size
+	// 5th byte: error code
+	// 6th byte: command
+	header := createHeader(size)
+	header[4] = errCode
+	header[5] = commandToWrite.Code
+
+	// Write b to writer
+	writtenSize, err := writer.WriteTo(append(header, b...), address)
+	if err != nil {
+		return writtenSize, err
+	}
+	return writtenSize, err
+}
+
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value
 func readSize(reader io.Reader) (uint32, error) {
 	// Read first 4 bytes for the size
