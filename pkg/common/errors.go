@@ -36,6 +36,8 @@ var ErrorCodes = [256]*Error{
 	PeerUnavailableError,
 	PubKeyNotFoundError,
 	ClosedConnError,
+	TimeoutError,
+	DataTooLargeError,
 }
 
 var UnknownCodeError = &Error{
@@ -106,4 +108,14 @@ var PubKeyNotFoundError = &Error{
 var ClosedConnError = &Error{
 	Err:     errors.New("connection was closed by peer"),
 	ErrCode: 14,
+}
+
+var TimeoutError = &Error{
+	Err:     errors.New("connection timed out"),
+	ErrCode: 15,
+}
+
+var DataTooLargeError = &Error{
+	Err:     errors.New("data to large for buffer"),
+	ErrCode: 16,
 }
