@@ -23,8 +23,8 @@ const (
 	// ChunkSize is a size of each file chunks in bytes.
 	// Should be less than max value of uint32 (4294967295)
 	// since the util package use unsigned 4 bytes to represent the data size.
-	ChunkSize    = 16777216 // 2^24 bytes, about 16.7 MB
-	UDPChunkSize = 4066
+	ChunkSize    = 16777216             // 2^24 bytes, about 16.7 MB
+	UDPChunkSize = util.BufferSize - 30 // subtract 30 bytes for encryption and header additions
 	IvSize       = 12
 	SymKeySize   = 32
 
@@ -720,6 +720,7 @@ func (ag *AesGcmChunk) decryptBytes(encryptedData []byte, iv []byte) (decryptedD
 		Write chunk to file
 	Close file
 	rename file to decrypted filename */
+// TODO handle if packet resent (prev ack not received by sender)
 func (ag *AesGcmChunk) DecryptFileUDP(peerConn *net.UDPConn, peerAddr *net.UDPAddr, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (err error) {
 	response := make([]byte, 4)
 	// Create read buffer

@@ -301,7 +301,7 @@ func TestAesGcmChunk_EncryptFileUDP(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		// // Setup encryption structure
-		ag, err := EncryptSetup(testPath + "/A17_FlightPlan.pdf")
+		ag, err := EncryptSetup(testPath + "/1000000 Sales Records.csv")
 		log.Debug(ag.chunkCount)
 		// Encrypt and send file
 		err = ag.EncryptFileUDP(UDPConn, address2, recvPub, sendPriv)

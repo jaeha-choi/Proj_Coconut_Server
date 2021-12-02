@@ -73,9 +73,9 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, err
 }
 
-func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
-	// Read packet size
-
+func ReadMessageUDP(reader *net.UDPConn) (msg *Message, addr *net.UDPAddr, err error) {
+	// Read packet into buffer
+	buffer := make([]byte, BufferSize)
 	_, addr, err = reader.ReadFromUDP(buffer)
 	if err != nil {
 		return nil, nil, err
@@ -964,7 +964,7 @@ func ReadAckUDP(seqNum uint32, writer *net.UDPConn, address *net.UDPAddr, packet
 }
 
 func WriteFilePacketUDP(writer *net.UDPConn, addr *net.UDPAddr, sequence uint32, totalPackets uint32, e *common.Error, command *common.Command, data []byte) (packet []byte, err error) {
-	if len(data) > 4086 {
+	if len(data) > BufferSize-10 {
 		return nil, common.DataTooLargeError
 	}
 
