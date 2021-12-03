@@ -343,14 +343,16 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	defer func() {
 		serv.channel <- 1
 	}()
-	log.Debug(conn.RemoteAddr())
+	//log.Debug(conn.RemoteAddr())
 	var command = common.RequestPubKey
+	// read add code
 	msg, err := util.ReadMessage(conn)
 	if err != nil {
 		return err
 	}
 	if msg.Data == nil {
-		return common.GeneralServerError // TODO update error
+		_, err = util.WriteMessage(conn, nil, common.ClientNotFoundError, command)
+		return common.ClientNotFoundError // TODO update error
 	}
 	rxAddCode, err := strconv.Atoi(string(msg.Data))
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
@@ -360,6 +362,7 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 
 	c, ok := serv.devices.Load(rxPubKeyH)
 	if !ok || c == nil {
+		_, err = util.WriteMessage(conn, nil, common.ClientNotFoundError, command)
 		log.Debug(common.ClientNotFoundError)
 		return common.ClientNotFoundError
 	}
