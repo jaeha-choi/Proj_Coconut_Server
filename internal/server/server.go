@@ -352,7 +352,7 @@ func (serv *Server) handleRequestPubKey(conn net.Conn) (err error) { //
 	}
 	if msg.Data == nil {
 		_, err = util.WriteMessage(conn, nil, common.ClientNotFoundError, command)
-		return common.ClientNotFoundError // TODO update error
+		return common.ClientNotFoundError
 	}
 	rxAddCode, err := strconv.Atoi(string(msg.Data))
 	addCodeIdx := serv.addCodeIdx[rxAddCode-1]
@@ -665,7 +665,6 @@ func (serv *Server) connectionHandler(conn net.Conn) (err error) {
 			return err
 		}
 	}
-
 	return err
 }
 
