@@ -85,8 +85,9 @@ func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err e
 			return nil, err
 		}
 
+		name := keyF[:len(keyF)-5]
 		// Create pubKey file
-		pubOut, err := os.Create(keyF + ".pub")
+		pubOut, err := os.Create(name + ".pub")
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating pubKey file")
@@ -100,7 +101,7 @@ func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err e
 				err = errDef
 				return
 			}
-			if errDef := os.Chmod(keyF+".pub", 0644); errDef != nil {
+			if errDef := os.Chmod(name+".pub", 0644); errDef != nil {
 				log.Debug(errDef)
 				log.Error("Error while updating pubKey file permissions")
 				err = errDef
@@ -121,7 +122,7 @@ func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err e
 		}
 
 		// Create privKey file
-		privOut, err := os.OpenFile(keyF+".priv", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+		privOut, err := os.OpenFile(name+".priv", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error while creating private key in OpenKeysAsBlock")
@@ -135,7 +136,7 @@ func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err e
 				err = errDef
 				return
 			}
-			if errDef := os.Chmod(keyF+".priv", 0600); errDef != nil {
+			if errDef := os.Chmod(name+".priv", 0600); errDef != nil {
 				log.Debug(errDef)
 				log.Error("Error while updating permissions")
 				err = errDef
